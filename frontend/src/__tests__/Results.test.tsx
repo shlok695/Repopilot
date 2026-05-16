@@ -8,7 +8,7 @@ import * as scanApi from '../api/scanApi';
 vi.mock('../api/scanApi');
 
 describe('Results page', () => {
-  it('renders all 6 tabs', async () => {
+  it('renders the completed scan dashboard', async () => {
     vi.spyOn(scanApi, 'getScanResult').mockResolvedValue(mockScanResult);
 
     render(
@@ -19,12 +19,13 @@ describe('Results page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('button', { name: /Overview/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /README/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Vulnerabilities/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Bugs/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Suggested Fixes/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Full Report/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /example-repo/i })).toBeInTheDocument();
+    expect(screen.getByText('Total Vulns')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /README/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Vulnerabilities/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Bugs/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Suggested Fixes/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Final Report/i })).toBeInTheDocument();
   });
 });
 

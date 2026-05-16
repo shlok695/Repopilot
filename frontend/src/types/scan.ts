@@ -8,6 +8,7 @@ export interface RepoMetadata {
   hasTests: boolean;
   fileCount: number;
   totalLines: number;
+  packageManager?: string;
 }
 
 export interface Vulnerability {
@@ -41,20 +42,28 @@ export interface SuggestedFix {
   title: string;
   description: string;
   file?: string;
+  id?: string;
+  type?: 'vulnerability' | 'bug' | 'improvement';
+  priority?: 'high' | 'medium' | 'low';
+  effort?: 'low' | 'medium' | 'high';
+  relatedIssues?: string[];
 }
 
 export interface ScanResult {
   scanId: string;
-  status: 'pending' | 'scanning' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'scanning' | 'completed' | 'failed';
   repoMetadata: RepoMetadata;
   readme: Readme;
-  readmeFeedback: ReadmeFeedback;
+  readmeFeedback?: ReadmeFeedback;
   vulnerabilities: Vulnerability[];
   bugs: Bug[];
   suggestedFixes: SuggestedFix[];
   warnings: string[];
-  fullReport: string;
+  fullReport?: string;
+  reportMarkdown?: string;
   timestamp: string;
+  createdAt?: string;
+  completedAt?: string;
   error?: string;
 }
 

@@ -18,7 +18,7 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ scanId }) => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `repopilot_${scanId}_report.md`;
+      link.download = `scan_${scanId}_report.md`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

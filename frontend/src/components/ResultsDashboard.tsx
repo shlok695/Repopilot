@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { ScanResult } from '../types/scan';
 import VulnTable from './VulnTable';
 import BugTable from './BugTable';
@@ -172,9 +171,50 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ scanResult }) => {
           {/* README Tab */}
           {activeTab === 'readme' && (
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Auto-Generated README</h2>
-              <div className="prose max-w-none bg-gray-50 rounded-lg p-6">
-                <ReactMarkdown>{scanResult.readme.content}</ReactMarkdown>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">README Quality Feedback</h2>
+              
+              {/* Score Card */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6 border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Overall Score</h3>
+                    <p className="text-sm text-gray-600">Based on documentation quality and completeness</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-5xl font-bold text-blue-600">{scanResult.readmeFeedback.score}</div>
+                    <div className="text-sm text-gray-600 mt-1">out of 100</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Strengths */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="text-2xl mr-2">✅</span>
+                  Strengths
+                </h3>
+                <div className="space-y-2">
+                  {scanResult.readmeFeedback.strengths.map((strength, index) => (
+                    <div key={index} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-sm text-green-800">{strength}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Improvements */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <span className="text-2xl mr-2">💡</span>
+                  Suggested Improvements
+                </h3>
+                <div className="space-y-2">
+                  {scanResult.readmeFeedback.improvements.map((improvement, index) => (
+                    <div key={index} className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <p className="text-sm text-yellow-800">{improvement}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -208,10 +248,18 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ scanResult }) => {
               ) : (
                 <div className="space-y-4">
                   {scanResult.suggestedFixes.map((fix, index) => (
-                    <div key={index} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div key={index} className="bg-blue-50 border border-blue-200 rounded-lg p-5">
                       <div className="flex items-start">
-                        <span className="text-2xl mr-3">💡</span>
-                        <p className="text-gray-800">{fix}</p>
+                        <span className="text-2xl mr-3 flex-shrink-0">💡</span>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 mb-2">{fix.title}</h3>
+                          <p className="text-gray-700 mb-2">{fix.description}</p>
+                          {fix.file && (
+                            <p className="text-sm text-blue-700 font-mono bg-blue-100 px-2 py-1 rounded inline-block">
+                              📄 {fix.file}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -227,39 +275,16 @@ const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ scanResult }) => {
                 <h2 className="text-2xl font-bold text-gray-900">Full Report</h2>
                 <DownloadButton scanId={scanResult.scanId} />
               </div>
-              <div className="bg-gray-50 rounded-lg p-6">
-                <p className="text-gray-600 mb-4">
-                  The full report includes all findings, recommendations, and detailed analysis.
-                  Click the download button above to get the complete Markdown report.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h3 className="font-semibold text-gray-900 mb-2">Report Includes:</h3>
-                    <ul className="space-y-1 text-sm text-gray-700">
-                      <li>✓ Executive Summary</li>
-                      <li>✓ Repository Metadata</li>
-                      <li>✓ Auto-Generated README</li>
-                      <li>✓ Vulnerability Details</li>
-                      <li>✓ Bug Analysis</li>
-                      <li>✓ Suggested Fixes</li>
-                      <li>✓ Dependency Inventory</li>
-                      <li>✓ License Information</li>
-                      <li>✓ Code Complexity Analysis</li>
-                      <li>✓ Test Coverage Report</li>
-                    </ul>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h3 className="font-semibold text-gray-900 mb-2">Report Format:</h3>
-                    <ul className="space-y-1 text-sm text-gray-700">
-                      <li>📄 Format: Markdown (.md)</li>
-                      <li>📊 Tables and Charts</li>
-                      <li>🎨 Formatted for GitHub</li>
-                      <li>📋 Easy to Share</li>
-                      <li>🔍 Searchable Content</li>
-                    </ul>
-                  </div>
+              {scanResult.fullReport ? (
+                <pre className="bg-gray-50 rounded-lg p-6 overflow-x-auto whitespace-pre-wrap text-sm text-gray-800 font-mono">
+                  {scanResult.fullReport}
+                </pre>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-6 text-center">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Full Report Available</h3>
+                  <p className="text-gray-600">The generated report text is not available for this scan.</p>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

@@ -1,29 +1,14 @@
 import React from 'react';
 import { Bug } from '../types/scan';
+import { normalizeSeverity, getSeverityColor, getSeverityOrder } from '../utils/severity';
 
 interface BugTableProps {
   bugs: Bug[];
 }
 
 const BugTable: React.FC<BugTableProps> = ({ bugs }) => {
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'HIGH':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'MEDIUM':
-        return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'LOW':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'INFO':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
   const sortedBugs = [...bugs].sort((a, b) => {
-    const severityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2, INFO: 3 };
-    return severityOrder[a.severity] - severityOrder[b.severity];
+    return getSeverityOrder(a.severity) - getSeverityOrder(b.severity);
   });
 
   if (bugs.length === 0) {
@@ -63,7 +48,7 @@ const BugTable: React.FC<BugTableProps> = ({ bugs }) => {
             <tr key={index} className="hover:bg-gray-50">
               <td className="px-6 py-4 whitespace-nowrap">
                 <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getSeverityColor(bug.severity)}`}>
-                  {bug.severity}
+                  {normalizeSeverity(bug.severity)}
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

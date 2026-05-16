@@ -1,0 +1,13 @@
+{
+  "name": "repopilot-middleware",
+  "version": "1.0.0",
+  "description": "RepoPilot Middleware - Scan Orchestration Layer",
+  "main": "scanOrchestrator.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": ["repopilot", "middleware", "orchestration"],
+  "author": "",
+  "license": "MIT"
+}

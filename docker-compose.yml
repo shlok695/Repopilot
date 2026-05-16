@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: repopilot_backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
+      - MAX_ZIP_SIZE_MB=${MAX_ZIP_SIZE_MB:-25}
+      - SCAN_TIMEOUT_MS=${SCAN_TIMEOUT_MS:-90000}
+      - AGENT_TIMEOUT_MS=${AGENT_TIMEOUT_MS:-30000}
+      - TMP_DIR=/tmp/repopilot
+    volumes:
+      - repopilot_tmp:/tmp/repopilot
+      - ./middleware:/app/middleware
+      - ./agents:/app/agents
+    networks:
+      - repopilot_net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: repopilot_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:5000
+      - VITE_MOCK_API=false
+      - VITE_APP_TITLE=RepoPilot
+    networks:
+      - repopilot_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  repopilot_tmp:
+    driver: local
+
+networks:
+  repopilot_net:
+    driver: bridge
+
+# Made with Bob

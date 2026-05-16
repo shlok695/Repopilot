@@ -1,0 +1,12 @@
+{
+  "name": "repopilot-agents",
+  "version": "1.0.0",
+  "description": "RepoPilot Analysis Agents",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": ["repopilot", "agents", "analysis"],
+  "author": "",
+  "license": "MIT"
+}

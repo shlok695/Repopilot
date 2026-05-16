@@ -1,14 +1,133 @@
-import { spawnWithTimeout } from '../middleware/timeoutManager.js';
-import { existsSync } from 'fs';
+import { spawn } from 'child_process';
+import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { readdir, readFile } from 'fs/promises';
 
-const runEslint = async (repoPath) => {
-  const packageJsonPath = join(repoPath, 'package.json');
-  if (!existsSync(packageJsonPath)) return { findings: [], warnings: [] };
+const MAX_FINDINGS = 100;
+
+/**
+ * Spawn a command with timeout
+ */
+const spawnWithTimeout = (command, args, cwd, timeoutMs) => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, shell: true });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+      reject(new Error(`Command timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timeout);
+      if (timedOut) return;
+      
+      if (code === 0 || stdout) {
+        resolve({ stdout, stderr, code });
+      } else {
+        reject(new Error(`Command failed with code ${code}: ${stderr}`));
+      }
+    });
+
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+  });
+};
+
+/**
+ * Generate minimal .eslintrc.json based on detected framework
+ */
+const generateEslintConfig = (repoPath, repoMetadata) => {
+  const eslintrcPath = join(repoPath, '.eslintrc.json');
+  
+  // Don't overwrite existing config
+  if (existsSync(eslintrcPath)) {
+    return false;
+  }
+
+  const { detectedFrameworks = [], techStack = [] } = repoMetadata;
+  
+  let config = {
+    env: {
+      es2021: true,
+      node: true,
+    },
+    extends: ['eslint:recommended'],
+    parserOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+    },
+    rules: {
+      'no-unused-vars': 'warn',
+      'no-console': 'warn',
+      'no-debugger': 'error',
+    },
+  };
+
+  // React configuration
+  if (detectedFrameworks.includes('React') || detectedFrameworks.includes('Next.js')) {
+    config.env.browser = true;
+    config.extends.push('plugin:react/recommended');
+    config.parserOptions.ecmaFeatures = { jsx: true };
+    config.settings = {
+      react: { version: 'detect' },
+    };
+  }
+
+  // TypeScript configuration
+  if (techStack.includes('TypeScript')) {
+    config.parser = '@typescript-eslint/parser';
+    config.extends.push('plugin:@typescript-eslint/recommended');
+    config.plugins = ['@typescript-eslint'];
+  }
+
+  // Vue configuration
+  if (detectedFrameworks.includes('Vue')) {
+    config.extends.push('plugin:vue/vue3-recommended');
+  }
 
   try {
-    const { stdout } = await spawnWithTimeout('npx', ['eslint', '.', '--format', 'json'], repoPath, 15000);
+    writeFileSync(eslintrcPath, JSON.stringify(config, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Run eslint for JavaScript/TypeScript
+ */
+const runEslint = async (repoPath, repoMetadata) => {
+  const packageJsonPath = join(repoPath, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return { findings: [], warnings: [] };
+  }
+
+  // Generate .eslintrc.json if it doesn't exist
+  const configGenerated = generateEslintConfig(repoPath, repoMetadata);
+
+  try {
+    const { stdout } = await spawnWithTimeout(
+      'npx', 
+      ['eslint', '.', '--format', 'json', '--no-eslintrc'].concat(
+        configGenerated ? ['--config', '.eslintrc.json'] : []
+      ), 
+      repoPath, 
+      30000
+    );
     const result = JSON.parse(stdout);
     
     const findings = [];
@@ -18,84 +137,192 @@ const runEslint = async (repoPath) => {
           findings.push({
             severity: 'MEDIUM',
             tool: 'eslint',
-            file: file.filePath.replace(repoPath, ''),
-            issue: msg.message,
+            file: file.filePath.replace(repoPath, '').replace(/^[/\\]/, ''),
+            issue: `${msg.ruleId || 'error'}: ${msg.message} (line ${msg.line})`,
             recommendation: msg.fix ? 'Auto-fixable with eslint --fix' : 'Review and fix manually',
           });
         }
       });
     });
     
-    return { findings: findings.slice(0, 20), warnings: [] }; // Limit to 20
+    const warnings = configGenerated 
+      ? ['Generated temporary .eslintrc.json for analysis'] 
+      : [];
+    
+    return { findings, warnings };
   } catch (error) {
-    return { findings: [], warnings: ['eslint not available or failed'] };
+    return { 
+      findings: [], 
+      warnings: ['eslint not available or failed - install with: npm install -D eslint'] 
+    };
   }
 };
 
+/**
+ * Run ruff for Python
+ */
 const runRuff = async (repoPath) => {
   const requirementsPath = join(repoPath, 'requirements.txt');
-  if (!existsSync(requirementsPath)) return { findings: [], warnings: [] };
+  if (!existsSync(requirementsPath)) {
+    return { findings: [], warnings: [] };
+  }
 
   try {
-    const { stdout } = await spawnWithTimeout('ruff', ['check', '.', '--output-format', 'json'], repoPath, 15000);
+    const { stdout } = await spawnWithTimeout(
+      'ruff', 
+      ['check', '.', '--output-format', 'json'], 
+      repoPath, 
+      30000
+    );
     const result = JSON.parse(stdout);
     
     const findings = result.map(r => ({
       severity: 'MEDIUM',
       tool: 'ruff',
       file: r.filename,
-      issue: `${r.code}: ${r.message}`,
+      issue: `${r.code}: ${r.message} (line ${r.location?.row || '?'})`,
       recommendation: r.fix ? 'Auto-fixable with ruff --fix' : 'Review and fix manually',
     }));
     
-    return { findings: findings.slice(0, 20), warnings: [] }; // Limit to 20
+    return { findings, warnings: [] };
   } catch (error) {
-    return { findings: [], warnings: ['ruff not available or failed'] };
+    return { 
+      findings: [], 
+      warnings: ['ruff not available - install with: pip install ruff'] 
+    };
   }
 };
 
+/**
+ * Detect missing error handling in async functions
+ */
+const detectMissingErrorHandling = (content, filePath) => {
+  const findings = [];
+  const lines = content.split('\n');
+  
+  // Pattern: async function without try/catch
+  const asyncFunctionPattern = /async\s+(function\s+\w+|[\w]+\s*=\s*async|[\w]+\s*:\s*async)/g;
+  let match;
+  
+  while ((match = asyncFunctionPattern.exec(content)) !== null) {
+    const startIndex = match.index;
+    const lineNumber = content.substring(0, startIndex).split('\n').length;
+    
+    // Check if there's a try/catch in the next 50 lines
+    const endLine = Math.min(lineNumber + 50, lines.length);
+    const functionBody = lines.slice(lineNumber - 1, endLine).join('\n');
+    
+    if (!functionBody.includes('try') && !functionBody.includes('catch')) {
+      findings.push({
+        severity: 'MEDIUM',
+        tool: 'pattern-scan',
+        file: filePath,
+        issue: `Async function without try/catch error handling (line ${lineNumber})`,
+        recommendation: 'Add try/catch block or use .catch() for error handling',
+      });
+    }
+  }
+  
+  return findings;
+};
+
+/**
+ * Detect console.error as only error handler
+ */
+const detectConsoleErrorOnly = (content, filePath) => {
+  const findings = [];
+  const lines = content.split('\n');
+  
+  // Look for catch blocks that only have console.error
+  const catchPattern = /catch\s*\([^)]*\)\s*\{([^}]*)\}/g;
+  let match;
+  
+  while ((match = catchPattern.exec(content)) !== null) {
+    const catchBody = match[1].trim();
+    const lineNumber = content.substring(0, match.index).split('\n').length;
+    
+    // Check if catch body only contains console.error
+    if (catchBody.includes('console.error') && 
+        !catchBody.includes('throw') && 
+        !catchBody.includes('logger') &&
+        !catchBody.includes('log.error') &&
+        catchBody.split('\n').filter(l => l.trim() && !l.includes('console.error')).length === 0) {
+      findings.push({
+        severity: 'LOW',
+        tool: 'pattern-scan',
+        file: filePath,
+        issue: `Error handler only uses console.error without proper logging (line ${lineNumber})`,
+        recommendation: 'Use proper logging library or error tracking service',
+      });
+    }
+  }
+  
+  return findings;
+};
+
+/**
+ * Enhanced fallback pattern scan with line numbers
+ */
 const fallbackPatternScan = async (repoPath) => {
   const findings = [];
   const warnings = ['Using fallback pattern scanning - install linting tools for better results'];
   
-  const patterns = [
-    { regex: /console\.log\(/g, issue: 'Console.log statement found', severity: 'LOW' },
-    { regex: /debugger;/g, issue: 'Debugger statement found', severity: 'MEDIUM' },
-    { regex: /TODO:/g, issue: 'TODO comment found', severity: 'INFO' },
-    { regex: /FIXME:/g, issue: 'FIXME comment found', severity: 'LOW' },
-  ];
-
-  const scanFile = async (filePath) => {
+  const scanFile = async (filePath, relativePath) => {
     try {
       const content = await readFile(filePath, 'utf-8');
+      const lines = content.split('\n');
+      
+      // Pattern-based checks with line numbers
+      const patterns = [
+        { regex: /console\.log\(/g, issue: 'Console.log statement', severity: 'LOW' },
+        { regex: /debugger;/g, issue: 'Debugger statement', severity: 'MEDIUM' },
+        { regex: /TODO:/gi, issue: 'TODO comment', severity: 'INFO' },
+        { regex: /FIXME:/gi, issue: 'FIXME comment', severity: 'LOW' },
+        { regex: /HACK:/gi, issue: 'HACK comment', severity: 'MEDIUM' },
+      ];
+
       patterns.forEach(({ regex, issue, severity }) => {
-        const matches = content.match(regex);
-        if (matches && matches.length > 0) {
-          findings.push({
-            severity,
-            tool: 'pattern-scan',
-            file: filePath.replace(repoPath, ''),
-            issue: `${issue} (${matches.length} occurrence${matches.length > 1 ? 's' : ''})`,
-            recommendation: 'Review and clean up code',
-          });
-        }
+        lines.forEach((line, index) => {
+          if (regex.test(line)) {
+            findings.push({
+              severity,
+              tool: 'pattern-scan',
+              file: relativePath,
+              issue: `${issue} (line ${index + 1}): ${line.trim().substring(0, 60)}...`,
+              recommendation: 'Review and clean up code',
+            });
+          }
+        });
       });
+
+      // Detect missing error handling
+      const errorHandlingIssues = detectMissingErrorHandling(content, relativePath);
+      findings.push(...errorHandlingIssues);
+
+      // Detect console.error only handlers
+      const consoleErrorIssues = detectConsoleErrorOnly(content, relativePath);
+      findings.push(...consoleErrorIssues);
+
     } catch {
       // Ignore file read errors
     }
   };
 
-  const scanDir = async (dir) => {
+  const scanDir = async (dir, baseDir = dir) => {
     try {
       const entries = await readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'dist') {
+          continue;
+        }
         
         const fullPath = join(dir, entry.name);
+        const relativePath = fullPath.replace(baseDir, '').replace(/^[/\\]/, '');
+        
         if (entry.isDirectory()) {
-          await scanDir(fullPath);
-        } else if (entry.name.endsWith('.js') || entry.name.endsWith('.ts') || entry.name.endsWith('.py')) {
-          await scanFile(fullPath);
+          await scanDir(fullPath, baseDir);
+        } else if (entry.name.match(/\.(js|jsx|ts|tsx|py)$/)) {
+          await scanFile(fullPath, relativePath);
         }
       }
     } catch {
@@ -105,38 +332,69 @@ const fallbackPatternScan = async (repoPath) => {
 
   await scanDir(repoPath);
   
-  return { findings: findings.slice(0, 15), warnings }; // Limit to 15
+  return { findings, warnings };
 };
 
-export const scanBugs = async (repoPath, repoMetadata) => {
+/**
+ * Main bug scanner function
+ */
+export async function scanBugs(repoPath, repoMetadata) {
   const allFindings = [];
   const allWarnings = [];
 
   // Run eslint for JavaScript/TypeScript
-  if (repoMetadata.languages.includes('JavaScript') || repoMetadata.languages.includes('TypeScript')) {
-    const { findings, warnings } = await runEslint(repoPath);
+  if (repoMetadata.techStack?.includes('JavaScript') || 
+      repoMetadata.techStack?.includes('TypeScript') ||
+      repoMetadata.techStack?.includes('Node.js')) {
+    const { findings, warnings } = await runEslint(repoPath, repoMetadata);
     allFindings.push(...findings);
     allWarnings.push(...warnings);
   }
 
   // Run ruff for Python
-  if (repoMetadata.languages.includes('Python')) {
+  if (repoMetadata.techStack?.includes('Python')) {
     const { findings, warnings } = await runRuff(repoPath);
     allFindings.push(...findings);
     allWarnings.push(...warnings);
   }
 
-  // If no tools worked, use fallback pattern scan
-  if (allFindings.length === 0 && allWarnings.length > 0) {
-    const fallbackResult = await fallbackPatternScan(repoPath);
-    allFindings.push(...fallbackResult.findings);
+  // Always run fallback pattern scan for additional checks
+  const fallbackResult = await fallbackPatternScan(repoPath);
+  allFindings.push(...fallbackResult.findings);
+  if (allFindings.length === 0) {
     allWarnings.push(...fallbackResult.warnings);
   }
 
+  // Deduplicate findings
+  const uniqueFindings = [];
+  const seen = new Set();
+  
+  allFindings.forEach(finding => {
+    const key = `${finding.tool}:${finding.file}:${finding.issue}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueFindings.push(finding);
+    }
+  });
+
+  // Sort by severity
+  const severityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2, INFO: 3 };
+  uniqueFindings.sort((a, b) => {
+    return (severityOrder[a.severity] || 4) - (severityOrder[b.severity] || 4);
+  });
+
+  // Cap at 100 findings
+  const truncated = uniqueFindings.length > MAX_FINDINGS;
+  const cappedFindings = uniqueFindings.slice(0, MAX_FINDINGS);
+  
+  if (truncated) {
+    allWarnings.push(`Found ${uniqueFindings.length} code issues, showing top ${MAX_FINDINGS}`);
+  }
+
   return {
-    findings: allFindings,
+    findings: cappedFindings,
     warnings: allWarnings.filter(w => w), // Remove empty warnings
   };
-};
+}
 
 // Made with Bob

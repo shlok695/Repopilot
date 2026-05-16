@@ -3,33 +3,66 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import healthRouter from './routes/health.js';
 import scanRouter from './routes/scan.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { autoCleanup } from './utils/storage.js';
+import { requestId } from './middleware/requestId.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { sanitizeBody } from './middleware/sanitize.js';
 
 // Load environment variables
 config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Process-level error handlers
+process.on('uncaughtException', (error: Error) => {
+  console.error('💥 UNCAUGHT EXCEPTION! Shutting down...');
+  console.error('Error name:', error.name);
+  console.error('Error message:', error.message);
+  console.error('Stack trace:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  console.error('💥 UNHANDLED REJECTION! Shutting down...');
+  console.error('Rejection reason:', reason);
+  if (reason instanceof Error) {
+    console.error('Stack trace:', reason.stack);
+  }
+  process.exit(1);
+});
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
 
-// Middleware
+// Security Middleware
 app.use(helmet());
+app.use(requestId); // Add X-Request-ID to all responses
+
+// CORS - Allow only GET and POST methods
 app.use(cors({
   origin: ALLOWED_ORIGIN,
   credentials: true,
+  methods: ['GET', 'POST'],
 }));
-app.use(morgan('combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Logging
+const isDev = process.env.NODE_ENV !== 'production';
+if (isDev) {
+  app.use(morgan('dev'));
+}
+app.use(requestLogger); // Custom logger with request ID and timing
+
+// Body parsing with size limit
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Request sanitization
+app.use(sanitizeBody);
 
 // Create necessary directories
 const createDirectories = () => {
@@ -67,6 +100,12 @@ app.use('/api/health', healthRouter);
 app.use('/api/scan', scanRouter);
 app.use('/api/scans', scanRouter);
 
+// Standalone metrics endpoint (also available at /api/health/metrics)
+import { getMetrics } from './utils/metrics.js';
+app.get('/api/metrics', (_req, res) => {
+  res.json(getMetrics());
+});
+
 // Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -82,6 +121,19 @@ const startServer = async () => {
       console.log(`📡 CORS enabled for: ${ALLOWED_ORIGIN}`);
       console.log(`💾 Storage directory: ${TMP_DIR}`);
       console.log(`\n✅ Server is ready to accept requests\n`);
+      
+      // Run cleanup every hour
+      setInterval(async () => {
+        console.log('[Server] Running auto-cleanup of old scans...');
+        try {
+          await autoCleanup();
+          console.log('[Server] Auto-cleanup completed successfully');
+        } catch (error) {
+          console.error('[Server] Auto-cleanup failed:', error);
+        }
+      }, 60 * 60 * 1000); // 1 hour in milliseconds
+      
+      console.log('🧹 Auto-cleanup scheduled to run every hour');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

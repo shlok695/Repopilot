@@ -5,7 +5,14 @@
   "main": "scanOrchestrator.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose --testPathIgnorePatterns=integration",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose --testPathPattern=integration --testTimeout=120000",
+    "test:all": "node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose --testTimeout=120000",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch --testPathIgnorePatterns=integration"
+  },
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "jest": "^29.7.0"
   },
   "keywords": ["repopilot", "middleware", "orchestration"],
   "author": "",

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import LoadingProgress from '../components/LoadingProgress';
+import LoadingSpinner from '../components/LoadingSpinner';
 import ResultsDashboard from '../components/ResultsDashboard';
 import ErrorBanner from '../components/ErrorBanner';
 import { getScanResult } from '../api/scanApi';
@@ -32,7 +32,7 @@ const Results: React.FC = () => {
           setIsLoading(false);
         }
       } catch (err: any) {
-        setError(err.response?.data?.message || err.message || 'Failed to fetch scan results');
+        setError(err.response?.data?.message || (err.request ? 'Backend is not reachable. Please check the server.' : 'Scan failed. Please try again.'));
         setIsLoading(false);
       }
     };
@@ -53,13 +53,13 @@ const Results: React.FC = () => {
 
         {isLoading && !scanResult && (
           <div className="max-w-4xl mx-auto">
-            <LoadingProgress />
+            <LoadingSpinner />
           </div>
         )}
 
         {scanResult && scanResult.status === 'scanning' && (
           <div className="max-w-4xl mx-auto mb-6">
-            <LoadingProgress />
+            <LoadingSpinner />
           </div>
         )}
 

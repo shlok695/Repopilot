@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import ScanForm from '../components/ScanForm';
 import ErrorBanner from '../components/ErrorBanner';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { startScan } from '../api/scanApi';
 import { ScanPayload } from '../types/scan';
 
@@ -19,7 +20,7 @@ const Home: React.FC = () => {
       const result = await startScan(payload);
       navigate(`/results/${result.scanId}`);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to start scan');
+      setError(err.response?.data?.message || (err.request ? 'Backend is not reachable. Please check the server.' : 'Scan failed. Please try again.'));
       setIsLoading(false);
     }
   };
@@ -36,10 +37,10 @@ const Home: React.FC = () => {
               RepoPilot 🚀
             </h1>
             <p className="text-xl text-gray-600 mb-2">
-              AI-Powered Repository Analysis & Security Scanner
+              AI-powered repository review in seconds.
             </p>
             <p className="text-gray-500">
-              Analyze GitHub repositories or upload ZIP files for comprehensive security and code quality reports
+              Upload a GitHub repository or ZIP file and get README feedback, vulnerability checks, bug insights, and suggested fixes.
             </p>
           </div>
 
@@ -54,6 +55,12 @@ const Home: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl p-8">
             <ScanForm onSubmit={handleScanSubmit} isLoading={isLoading} />
           </div>
+
+          {isLoading && (
+            <div className="mt-6">
+              <LoadingSpinner />
+            </div>
+          )}
 
           {/* Features */}
           <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ScanResult, ScanPayload } from '../types/scan';
 import { mockScanResult } from './mockData';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const USE_MOCK = import.meta.env.VITE_MOCK_API === 'true';
 
 const apiClient = axios.create({

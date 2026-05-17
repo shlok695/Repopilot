@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { generateReadme } from './readmeGeneratorAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -7,8 +6,21 @@ const mockFs = {
   readFileSync: jest.fn(),
 };
 
+const normalizePath = (value) => String(value).replace(/\\/g, '/');
+const fsMock = {
+  existsSync: (filePath) => mockFs.existsSync(normalizePath(filePath)),
+  readFileSync: (filePath, ...args) => mockFs.readFileSync(normalizePath(filePath), ...args),
+};
+fsMock.default = fsMock;
+
 // Mock the fs module
-jest.unstable_mockModule('fs', () => mockFs);
+jest.unstable_mockModule('fs', () => fsMock);
+jest.unstable_mockModule('fs/promises', () => ({
+  readFile: jest.fn((filePath) => Promise.resolve(mockFs.readFileSync(normalizePath(filePath)))),
+  readdir: jest.fn(() => Promise.resolve([])),
+}));
+
+const { generateReadme } = await import('./readmeGeneratorAgent.js');
 
 describe('readmeGeneratorAgent', () => {
   beforeEach(() => {
@@ -46,7 +58,7 @@ describe('readmeGeneratorAgent', () => {
       expect(result.title).toBe('test-app');
       expect(result.content).toContain('## Installation');
       expect(result.content).toContain('npm install');
-      expect(result.content).toContain('## Usage');
+      expect(result.content).toContain('## Running Locally');
       expect(result.content).toContain('npm start');
     });
 
@@ -198,8 +210,8 @@ Some old content here.`;
       const result = await generateReadme(repoPath, repoMetadata);
 
       expect(result.content).toContain('Docker');
-      expect(result.content).toContain('docker-compose up');
       expect(result.content).toContain('docker build');
+      expect(result.content).toContain('docker run');
     });
 
     test('should include test instructions when tests are detected', async () => {
@@ -225,9 +237,9 @@ Some old content here.`;
 
       const result = await generateReadme(repoPath, repoMetadata);
 
-      expect(result.content).toContain('## Testing');
+      expect(result.content).toContain('## Running Tests');
       expect(result.content).toContain('npm test');
-      expect(result.content).toContain('jest');
+      expect(result.content).toContain('npm run test:coverage');
     });
 
     test('should include badges for detected technologies', async () => {
@@ -302,7 +314,7 @@ Some old content here.`;
 
       const result = await generateReadme(repoPath, repoMetadata);
 
-      expect(result.content).toContain('## API');
+      expect(result.content).toContain('REST API application');
       expect(result.content).toContain('Express');
     });
   });

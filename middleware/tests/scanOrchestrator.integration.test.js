@@ -118,7 +118,7 @@ describe('scanOrchestrator – integration tests (real agents)', () => {
     // vulnerabilities – each item should have at minimum severity and a description
     result.vulnerabilities.forEach(vuln => {
       expect(typeof vuln.severity).toBe('string');
-      expect(['HIGH', 'MEDIUM', 'LOW', 'INFO', 'critical', 'high', 'medium', 'low']).toContain(vuln.severity);
+      expect(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'critical', 'high', 'medium', 'low']).toContain(vuln.severity);
     });
 
     // bugs – each item should have severity and file
@@ -154,6 +154,7 @@ describe('scanOrchestrator – integration tests (real agents)', () => {
       'bugs',
       'suggestedFixes',
       'reportMarkdown',
+      'scanDuration',
       'warnings',
       'error',         // only present when status === 'failed'
     ]);

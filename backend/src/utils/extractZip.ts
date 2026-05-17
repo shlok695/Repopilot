@@ -1,10 +1,14 @@
 import { createReadStream } from 'fs';
 import { unlink } from 'fs/promises';
-import { join } from 'path';
+import { join, posix } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync } from 'fs';
 import unzipper from 'unzipper';
 
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
+const joinPath = TMP_DIR.startsWith('/') ? posix.join : join;
+const storagePath = (...parts: string[]): string => {
+  return joinPath(TMP_DIR, ...parts);
+};
 const MAX_ENTRIES = 5000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -17,7 +21,7 @@ export class ExtractionError extends Error {
 }
 
 export const extractZip = async (zipPath: string, scanId: string): Promise<string> => {
-  const extractPath = join(TMP_DIR, 'repos', scanId);
+  const extractPath = storagePath('repos', scanId);
   let skippedCount = 0;
   let entryCount = 0;
 
@@ -70,7 +74,7 @@ export const extractZip = async (zipPath: string, scanId: string): Promise<strin
         }
 
         // Extract the entry
-        const fullPath = join(extractPath, filePath);
+        const fullPath = joinPath(extractPath, filePath);
         
         if (entry.type === 'Directory') {
           if (!existsSync(fullPath)) {
@@ -79,7 +83,7 @@ export const extractZip = async (zipPath: string, scanId: string): Promise<strin
           entry.autodrain();
         } else {
           // Ensure parent directory exists
-          const parentDir = join(fullPath, '..');
+          const parentDir = joinPath(fullPath, '..');
           if (!existsSync(parentDir)) {
             mkdirSync(parentDir, { recursive: true });
           }
@@ -94,7 +98,7 @@ export const extractZip = async (zipPath: string, scanId: string): Promise<strin
     // Post-extraction validation: count files
     const files = readdirSync(extractPath, { recursive: true });
     const fileCount = files.filter(f => {
-      const fullPath = join(extractPath, f.toString());
+      const fullPath = joinPath(extractPath, f.toString());
       try {
         return statSync(fullPath).isFile();
       } catch {

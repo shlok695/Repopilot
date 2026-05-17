@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { inventoryDependencies } from './dependencyInventoryAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -7,7 +6,9 @@ const mockFs = {
   readFileSync: jest.fn(),
 };
 
-jest.unstable_mockModule('fs', () => mockFs);
+jest.unstable_mockModule('fs', () => ({ ...mockFs, default: mockFs }));
+
+const { inventoryDependencies } = await import('./dependencyInventoryAgent.js');
 
 describe('dependencyInventoryAgent', () => {
   beforeEach(() => {

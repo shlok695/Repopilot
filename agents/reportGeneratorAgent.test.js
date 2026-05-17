@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { generateFinalReport } from './reportGeneratorAgent.js';
 
 // Mock reportFormatter
 const mockFormatFinalReport = jest.fn();
@@ -7,6 +6,8 @@ const mockFormatFinalReport = jest.fn();
 jest.unstable_mockModule('../middleware/reportFormatter.js', () => ({
   formatFinalReport: mockFormatFinalReport,
 }));
+
+const { generateFinalReport } = await import('./reportGeneratorAgent.js');
 
 describe('reportGeneratorAgent', () => {
   beforeEach(() => {

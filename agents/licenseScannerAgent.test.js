@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { scanLicenses } from './licenseScannerAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -10,7 +9,7 @@ const mockFs = {
 // Mock spawnWithTimeout
 const mockSpawnWithTimeout = jest.fn();
 
-jest.unstable_mockModule('fs', () => mockFs);
+jest.unstable_mockModule('fs', () => ({ ...mockFs, default: mockFs }));
 jest.unstable_mockModule('fs/promises', () => ({
   readFile: jest.fn((path) => Promise.resolve(mockFs.readFileSync(path))),
 }));
@@ -18,9 +17,12 @@ jest.unstable_mockModule('../middleware/timeoutManager.js', () => ({
   spawnWithTimeout: mockSpawnWithTimeout,
 }));
 
+const { scanLicenses } = await import('./licenseScannerAgent.js');
+
 describe('licenseScannerAgent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSpawnWithTimeout.mockReset();
   });
 
   describe('scanLicenses', () => {

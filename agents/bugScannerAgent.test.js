@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { scanBugs } from './bugScannerAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -14,14 +13,55 @@ const mockFs = {
 const mockSpawnWithTimeout = jest.fn();
 
 // Mock the modules
-jest.unstable_mockModule('fs', () => mockFs);
+const normalizePath = (value) => String(value).replace(/\\/g, '/');
+const fsMock = {
+  existsSync: (filePath) => mockFs.existsSync(normalizePath(filePath)),
+  readFileSync: (filePath, ...args) => mockFs.readFileSync(normalizePath(filePath), ...args),
+  writeFileSync: (...args) => mockFs.writeFileSync(...args),
+  readdirSync: (dirPath, ...args) => mockFs.readdirSync(normalizePath(dirPath), ...args),
+  statSync: (filePath, ...args) => {
+    const normalized = normalizePath(filePath);
+    const stats = mockFs.statSync(normalized, ...args);
+    const baseName = normalized.split('/').pop();
+    const isFileByName = baseName.includes('.');
+    return {
+      ...stats,
+      isDirectory: () => !isFileByName && stats.isDirectory(),
+      isFile: () => isFileByName || stats.isFile(),
+    };
+  },
+};
+fsMock.default = fsMock;
+
+jest.unstable_mockModule('fs', () => fsMock);
+jest.unstable_mockModule('fs/promises', () => ({
+  readFile: jest.fn((filePath) => Promise.resolve(mockFs.readFileSync(normalizePath(filePath)))),
+  readdir: jest.fn((dirPath, options) => {
+    const normalizedDir = normalizePath(dirPath);
+    const entries = mockFs.readdirSync(normalizedDir);
+    if (!options?.withFileTypes) return Promise.resolve(entries);
+    return Promise.resolve(entries.map((name) => {
+      const fullPath = `${normalizedDir}/${name}`;
+      const stats = fsMock.statSync(fullPath);
+      const directoryNames = new Set(['src', 'test', 'tests', '__tests__', 'lib', 'app']);
+      return {
+        name,
+        isDirectory: () => directoryNames.has(name),
+        isFile: () => !directoryNames.has(name),
+      };
+    }));
+  }),
+}));
 jest.unstable_mockModule('../middleware/timeoutManager.js', () => ({
   spawnWithTimeout: mockSpawnWithTimeout,
 }));
 
+const { scanBugs } = await import('./bugScannerAgent.js');
+
 describe('bugScannerAgent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSpawnWithTimeout.mockReset();
   });
 
   describe('scanBugs', () => {

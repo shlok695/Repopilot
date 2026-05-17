@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { analyzeRepo } from './repoAnalyzerAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -9,8 +8,45 @@ const mockFs = {
   statSync: jest.fn(),
 };
 
+const normalizePath = (value) => String(value).replace(/\\/g, '/');
+const fsMock = {
+  existsSync: (filePath) => mockFs.existsSync(normalizePath(filePath)),
+  readFileSync: (filePath, ...args) => mockFs.readFileSync(normalizePath(filePath), ...args),
+  readdirSync: (dirPath, ...args) => mockFs.readdirSync(normalizePath(dirPath), ...args),
+  statSync: (filePath, ...args) => mockFs.statSync(normalizePath(filePath), ...args),
+};
+fsMock.default = fsMock;
+
 // Mock the fs module
-jest.unstable_mockModule('fs', () => mockFs);
+jest.unstable_mockModule('fs', () => fsMock);
+jest.unstable_mockModule('fs/promises', () => ({
+  readFile: jest.fn((filePath) => Promise.resolve(mockFs.readFileSync(normalizePath(filePath)))),
+  stat: jest.fn((filePath) => Promise.resolve({
+    ...mockFs.statSync(normalizePath(filePath)),
+    size: mockFs.statSync(normalizePath(filePath)).size ?? 1000,
+  })),
+  readdir: jest.fn((dirPath, options) => {
+    const normalizedDir = normalizePath(dirPath);
+    const entries = normalizedDir.endsWith('/workflows')
+      ? ['ci.yml']
+      : mockFs.readdirSync(normalizedDir);
+    if (!options?.withFileTypes) {
+      return Promise.resolve(entries);
+    }
+    return Promise.resolve(entries.map((name) => {
+      const fullPath = `${normalizedDir}/${name}`;
+      const stats = mockFs.statSync(fullPath);
+      const directoryNames = new Set(['src', 'tests', 'node_modules', '.git', '.github']);
+      return {
+        name,
+        isDirectory: () => directoryNames.has(name) || (stats.isDirectory() && !name.includes('.')),
+        isFile: () => !directoryNames.has(name) && (stats.isFile() || name.includes('.')),
+      };
+    }));
+  }),
+}));
+
+const { analyzeRepo } = await import('./repoAnalyzerAgent.js');
 
 describe('repoAnalyzerAgent', () => {
   beforeEach(() => {
@@ -73,7 +109,7 @@ describe('repoAnalyzerAgent', () => {
       expect(result.frameworks).toContain('React');
       expect(result.hasDocker).toBe(false);
       expect(result.hasTests).toBe(true);
-      expect(result.testFrameworks).toContain('jest');
+      expect(result.testFrameworks).toContain('Jest');
       expect(result.fileCount).toBeGreaterThan(0);
       expect(result.packageJson).toBeDefined();
       expect(result.packageJson.name).toBe('test-app');

@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { ScanResult, ScanPayload } from '../types/scan';
 import { mockReactResult, mockFlaskResult } from './mockData';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const USE_MOCK = import.meta.env.VITE_MOCK_API === 'true';
 const MOCK_ERROR = import.meta.env.VITE_MOCK_ERROR === 'true';
 

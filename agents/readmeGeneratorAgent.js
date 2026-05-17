@@ -484,7 +484,7 @@ const generateApiRoutes = (routes) => {
  */
 const generateBadges = (repoMetadata, packageJson) => {
   const badges = [];
-  const { techStack = [] } = repoMetadata;
+  const { techStack = [], detectedFrameworks = [] } = repoMetadata;
 
   // Node.js version badge
   if (packageJson?.engines?.node) {
@@ -509,6 +509,10 @@ const generateBadges = (repoMetadata, packageJson) => {
     badges.push('![TypeScript](https://img.shields.io/badge/typescript-5.0%2B-3178C6?logo=typescript&logoColor=white)');
   }
 
+  if (detectedFrameworks.includes('React')) {
+    badges.push('![React](https://img.shields.io/badge/react-18%2B-61DAFB?logo=react&logoColor=black)');
+  }
+
   // Test framework badges
   if (repoMetadata.testFrameworks?.includes('Jest')) {
     badges.push('![Jest](https://img.shields.io/badge/tested%20with-jest-C21325?logo=jest&logoColor=white)');
@@ -528,22 +532,31 @@ const generateBadges = (repoMetadata, packageJson) => {
  * Main README generator function
  */
 export async function generateReadme(repoPath, repoMetadata) {
-  const { name, techStack = [], detectedFrameworks = [], summary = '' } = repoMetadata;
+  const baseTechStack = repoMetadata.techStack || repoMetadata.languages || [];
+  const techStackWithDocker = repoMetadata.hasDocker && !baseTechStack.includes('Docker')
+    ? [...baseTechStack, 'Docker']
+    : baseTechStack;
+  const normalizedMetadata = {
+    ...repoMetadata,
+    techStack: [...new Set([...techStackWithDocker, ...(repoMetadata.detectedFrameworks || repoMetadata.frameworks || [])])],
+    detectedFrameworks: repoMetadata.detectedFrameworks || repoMetadata.frameworks || [],
+  };
+  const { name, techStack = [], detectedFrameworks = [], summary = '' } = normalizedMetadata;
   
   // Read available files
-  const packageJson = await readPackageJson(repoPath);
+  const packageJson = await readPackageJson(repoPath) || repoMetadata.packageJson || null;
   const existingReadme = await readExistingReadme(repoPath);
   const envVars = await readEnvExample(repoPath);
   const apiRoutes = await detectApiRoutes(repoPath);
   
   // Infer features
-  const features = inferFeatures(repoMetadata);
+  const features = inferFeatures(normalizedMetadata);
 
   // Build README content
   let content = `# ${name}\n\n`;
 
   // Add badges
-  content += generateBadges(repoMetadata, packageJson);
+  content += generateBadges(normalizedMetadata, packageJson);
 
   // Description - use existing README description if available
   content += `## Description\n\n`;
@@ -577,12 +590,12 @@ export async function generateReadme(repoPath, repoMetadata) {
 
   // Project Structure
   content += `## Project Structure\n\n`;
-  content += generateProjectStructure(repoMetadata);
+  content += generateProjectStructure(normalizedMetadata);
   content += '\n';
 
   // Installation
   content += `## Installation\n\n`;
-  content += generateInstallation(repoMetadata, packageJson);
+  content += generateInstallation(normalizedMetadata, packageJson);
 
   // Environment Variables
   content += `## Environment Variables\n\n`;
@@ -590,18 +603,18 @@ export async function generateReadme(repoPath, repoMetadata) {
 
   // Running Locally
   content += `## Running Locally\n\n`;
-  content += generateRunningLocally(packageJson, repoMetadata);
+  content += generateRunningLocally(packageJson, normalizedMetadata);
 
   // Running Tests
-  if (repoMetadata.testFrameworks && repoMetadata.testFrameworks.length > 0) {
+  if ((normalizedMetadata.testFrameworks && normalizedMetadata.testFrameworks.length > 0) || normalizedMetadata.hasTests) {
     content += `## Running Tests\n\n`;
-    content += generateTesting(packageJson, repoMetadata);
+    content += generateTesting(packageJson, normalizedMetadata);
   }
 
   // Deployment
   if (techStack.includes('Docker')) {
     content += `## Deployment\n\n`;
-    content += generateDeployment(repoMetadata);
+    content += generateDeployment(normalizedMetadata);
   }
 
   // API Routes

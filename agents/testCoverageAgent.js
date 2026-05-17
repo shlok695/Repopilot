@@ -506,6 +506,7 @@ export async function checkTestCoverage(repoPath, repoMetadata) {
     sourceFilesCount,
     testRatio: Math.round(testRatio),
     actualCoverage: actualCoverage !== null ? Math.round(actualCoverage) : null,
+    coveragePercentage: actualCoverage,
     hasTestDir,
     hasTestConfig,
     hasCoverageConfig,
@@ -513,6 +514,7 @@ export async function checkTestCoverage(repoPath, repoMetadata) {
     testConfigs,
     coverageDetails: coverageConfig.details,
     toolRecommendations,
+    recommendedTools: toolRecommendations,
     warnings,
   };
 }

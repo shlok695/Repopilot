@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { scanSecrets } from './secretsAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -15,13 +14,34 @@ const mockSpawnWithTimeout = jest.fn();
 // Mock sanitizeScannerOutput
 const mockSanitizeScannerOutput = jest.fn((text) => text);
 
-jest.unstable_mockModule('fs', () => mockFs);
+const normalizePath = (value) => String(value).replace(/\\/g, '/');
+const fsMock = {
+  existsSync: (filePath) => mockFs.existsSync(normalizePath(filePath)),
+  readFileSync: (filePath, ...args) => mockFs.readFileSync(normalizePath(filePath), ...args),
+  readdirSync: (dirPath, ...args) => mockFs.readdirSync(normalizePath(dirPath), ...args),
+  statSync: (filePath, ...args) => {
+    const normalized = normalizePath(filePath);
+    const stats = mockFs.statSync(normalized, ...args);
+    const baseName = normalized.split('/').pop();
+    const isFileByName = baseName.includes('.');
+    return {
+      ...stats,
+      isDirectory: () => !isFileByName && stats.isDirectory(),
+      isFile: () => isFileByName || stats.isFile(),
+    };
+  },
+};
+fsMock.default = fsMock;
+
+jest.unstable_mockModule('fs', () => fsMock);
 jest.unstable_mockModule('../middleware/timeoutManager.js', () => ({
   spawnWithTimeout: mockSpawnWithTimeout,
 }));
 jest.unstable_mockModule('../middleware/sanitizeOutput.js', () => ({
   sanitizeScannerOutput: mockSanitizeScannerOutput,
 }));
+
+const { scanSecrets } = await import('./secretsAgent.js');
 
 describe('secretsAgent', () => {
   beforeEach(() => {

@@ -1,8 +1,11 @@
 import simpleGit from 'simple-git';
-import { join } from 'path';
+import { join, posix } from 'path';
 import { existsSync, readdirSync, mkdirSync } from 'fs';
 
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
+const storagePath = (...parts: string[]): string => {
+  return TMP_DIR.startsWith('/') ? posix.join(TMP_DIR, ...parts) : join(TMP_DIR, ...parts);
+};
 const CLONE_TIMEOUT_MS = 30000; // 30 seconds
 const RETRY_DELAY_MS = 3000; // 3 seconds
 
@@ -64,7 +67,7 @@ export const cloneRepo = async (repoUrl: string, scanId: string): Promise<string
     throw new ValidationError('Invalid characters in repository URL');
   }
 
-  const repoPath = join(TMP_DIR, 'repos', scanId);
+  const repoPath = storagePath('repos', scanId);
   const sanitizedUrl = sanitizeUrl(repoUrl);
 
   // 3. Check if directory already exists
@@ -73,7 +76,7 @@ export const cloneRepo = async (repoUrl: string, scanId: string): Promise<string
   }
 
   // 4. Ensure parent directory exists
-  const parentDir = join(TMP_DIR, 'repos');
+  const parentDir = storagePath('repos');
   if (!existsSync(parentDir)) {
     mkdirSync(parentDir, { recursive: true });
   }

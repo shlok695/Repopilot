@@ -1,5 +1,4 @@
 import { jest } from '@jest/globals';
-import { analyzeComplexity } from './complexityAgent.js';
 
 // Mock fs module
 const mockFs = {
@@ -13,10 +12,32 @@ const mockFs = {
 // Mock spawnWithTimeout
 const mockSpawnWithTimeout = jest.fn();
 
-jest.unstable_mockModule('fs', () => mockFs);
+const normalizePath = (value) => String(value).replace(/\\/g, '/');
+const fsMock = {
+  existsSync: (filePath) => mockFs.existsSync(normalizePath(filePath)),
+  readFileSync: (filePath, ...args) => mockFs.readFileSync(normalizePath(filePath), ...args),
+  readdirSync: (dirPath, ...args) => mockFs.readdirSync(normalizePath(dirPath), ...args),
+  statSync: (filePath, ...args) => {
+    const normalized = normalizePath(filePath);
+    const stats = mockFs.statSync(normalized, ...args);
+    const baseName = normalized.split('/').pop();
+    const isFileByName = baseName.includes('.');
+    return {
+      ...stats,
+      isDirectory: () => !isFileByName && stats.isDirectory(),
+      isFile: () => isFileByName || stats.isFile(),
+    };
+  },
+  rmSync: (...args) => mockFs.rmSync(...args),
+};
+fsMock.default = fsMock;
+
+jest.unstable_mockModule('fs', () => fsMock);
 jest.unstable_mockModule('../middleware/timeoutManager.js', () => ({
   spawnWithTimeout: mockSpawnWithTimeout,
 }));
+
+const { analyzeComplexity } = await import('./complexityAgent.js');
 
 describe('complexityAgent', () => {
   beforeEach(() => {

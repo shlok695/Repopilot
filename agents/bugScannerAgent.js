@@ -1,51 +1,9 @@
-import { spawn } from 'child_process';
 import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { readdir, readFile } from 'fs/promises';
+import { spawnWithTimeout } from '../middleware/timeoutManager.js';
 
 const MAX_FINDINGS = 100;
-
-/**
- * Spawn a command with timeout
- */
-const spawnWithTimeout = (command, args, cwd, timeoutMs) => {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell: true });
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-      reject(new Error(`Command timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    child.stdout?.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr?.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    child.on('close', (code) => {
-      clearTimeout(timeout);
-      if (timedOut) return;
-      
-      if (code === 0 || stdout) {
-        resolve({ stdout, stderr, code });
-      } else {
-        reject(new Error(`Command failed with code ${code}: ${stderr}`));
-      }
-    });
-
-    child.on('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-  });
-};
 
 /**
  * Generate minimal .eslintrc.json based on detected framework
@@ -138,6 +96,7 @@ const runEslint = async (repoPath, repoMetadata) => {
             severity: 'MEDIUM',
             tool: 'eslint',
             file: file.filePath.replace(repoPath, '').replace(/^[/\\]/, ''),
+            line: msg.line,
             issue: `${msg.ruleId || 'error'}: ${msg.message} (line ${msg.line})`,
             recommendation: msg.fix ? 'Auto-fixable with eslint --fix' : 'Review and fix manually',
           });
@@ -252,11 +211,38 @@ const detectConsoleErrorOnly = (content, filePath) => {
         tool: 'pattern-scan',
         file: filePath,
         issue: `Error handler only uses console.error without proper logging (line ${lineNumber})`,
-        recommendation: 'Use proper logging library or error tracking service',
+        recommendation: 'Add proper error handling with structured logging or an error tracking service',
       });
     }
   }
   
+  return findings;
+};
+
+const detectEmptyCatchBlocks = (content, filePath) => {
+  const findings = [];
+  const catchPattern = /catch\s*\([^)]*\)\s*\{([^}]*)\}/g;
+  let match;
+
+  while ((match = catchPattern.exec(content)) !== null) {
+    const bodyWithoutComments = match[1]
+      .replace(/\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .trim();
+
+    if (!bodyWithoutComments) {
+      const lineNumber = content.substring(0, match.index).split('\n').length;
+      findings.push({
+        severity: 'MEDIUM',
+        tool: 'pattern-scan',
+        file: filePath,
+        line: lineNumber,
+        issue: `empty catch block detected (line ${lineNumber})`,
+        recommendation: 'Handle the error, log it, rethrow it, or document why it can be ignored.',
+      });
+    }
+  }
+
   return findings;
 };
 
@@ -288,6 +274,7 @@ const fallbackPatternScan = async (repoPath) => {
               severity,
               tool: 'pattern-scan',
               file: relativePath,
+              line: index + 1,
               issue: `${issue} (line ${index + 1}): ${line.trim().substring(0, 60)}...`,
               recommendation: 'Review and clean up code',
             });
@@ -303,12 +290,19 @@ const fallbackPatternScan = async (repoPath) => {
       const consoleErrorIssues = detectConsoleErrorOnly(content, relativePath);
       findings.push(...consoleErrorIssues);
 
+      const emptyCatchIssues = detectEmptyCatchBlocks(content, relativePath);
+      findings.push(...emptyCatchIssues);
+
     } catch {
       // Ignore file read errors
     }
   };
 
-  const scanDir = async (dir, baseDir = dir) => {
+  const scanDir = async (dir, baseDir = dir, depth = 0) => {
+    if (depth > 20) {
+      warnings.push(`Skipped deeply nested directory during fallback scan: ${dir}`);
+      return;
+    }
     try {
       const entries = await readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
@@ -320,7 +314,7 @@ const fallbackPatternScan = async (repoPath) => {
         const relativePath = fullPath.replace(baseDir, '').replace(/^[/\\]/, '');
         
         if (entry.isDirectory()) {
-          await scanDir(fullPath, baseDir);
+          await scanDir(fullPath, baseDir, depth + 1);
         } else if (entry.name.match(/\.(js|jsx|ts|tsx|py)$/)) {
           await scanFile(fullPath, relativePath);
         }
@@ -341,18 +335,20 @@ const fallbackPatternScan = async (repoPath) => {
 export async function scanBugs(repoPath, repoMetadata) {
   const allFindings = [];
   const allWarnings = [];
+  const techStack = repoMetadata.techStack || repoMetadata.languages || [];
+  const hasTestDirectory = ['test', 'tests', '__tests__'].some(dir => existsSync(join(repoPath, dir)));
 
   // Run eslint for JavaScript/TypeScript
-  if (repoMetadata.techStack?.includes('JavaScript') || 
-      repoMetadata.techStack?.includes('TypeScript') ||
-      repoMetadata.techStack?.includes('Node.js')) {
+  if (techStack.includes('JavaScript') || 
+      techStack.includes('TypeScript') ||
+      techStack.includes('Node.js')) {
     const { findings, warnings } = await runEslint(repoPath, repoMetadata);
     allFindings.push(...findings);
     allWarnings.push(...warnings);
   }
 
   // Run ruff for Python
-  if (repoMetadata.techStack?.includes('Python')) {
+  if (techStack.includes('Python')) {
     const { findings, warnings } = await runRuff(repoPath);
     allFindings.push(...findings);
     allWarnings.push(...warnings);
@@ -363,6 +359,16 @@ export async function scanBugs(repoPath, repoMetadata) {
   allFindings.push(...fallbackResult.findings);
   if (allFindings.length === 0) {
     allWarnings.push(...fallbackResult.warnings);
+  }
+
+  if (!hasTestDirectory && (techStack.includes('JavaScript') || techStack.includes('TypeScript') || techStack.includes('Python'))) {
+    allFindings.push({
+      severity: 'MEDIUM',
+      tool: 'pattern-scan',
+      file: 'N/A',
+      issue: 'No test directory found',
+      recommendation: 'Add a test, tests, or __tests__ directory with automated coverage for critical paths.',
+    });
   }
 
   // Deduplicate findings

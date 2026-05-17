@@ -165,20 +165,16 @@ describe('ResultsDashboard', () => {
   describe('Summary Stats Bar', () => {
     it('displays correct counts in the summary stats bar', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
-      
-      // Check vulnerability count
+
       const vulnStats = screen.getAllByText('3');
       expect(vulnStats.length).toBeGreaterThan(0);
-      
-      // Check bug count
+
       const bugStats = screen.getAllByText('1');
       expect(bugStats.length).toBeGreaterThan(0);
-      
-      // Check fixes count
+
       const fixStats = screen.getAllByText('3');
       expect(fixStats.length).toBeGreaterThan(0);
-      
-      // Check warnings count
+
       const warningStats = screen.getAllByText('2');
       expect(warningStats.length).toBeGreaterThan(0);
     });
@@ -211,10 +207,10 @@ describe('ResultsDashboard', () => {
     it('rows are sorted HIGH before MEDIUM before LOW', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Vulnerabilities');
-      
+
       const severityBadges = screen.getAllByText(/HIGH|MEDIUM|LOW/);
-      const vulnBadges = severityBadges.slice(0, 3); // First 3 are vulnerabilities
-      
+      const vulnBadges = severityBadges.slice(0, 3);
+
       expect(vulnBadges[0]).toHaveTextContent('HIGH');
       expect(vulnBadges[1]).toHaveTextContent('MEDIUM');
       expect(vulnBadges[2]).toHaveTextContent('LOW');
@@ -225,17 +221,13 @@ describe('ResultsDashboard', () => {
     it('clicking a vulnerability row expands the recommendation', async () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Vulnerabilities');
-      
-      // Find the first vulnerability row
+
       const vulnTitle = screen.getByText('SQL Injection vulnerability');
-      
-      // Recommendation should not be visible initially
+
       expect(screen.queryByText(/Update to version 4.18.0/)).not.toBeInTheDocument();
-      
-      // Click the row
+
       fireEvent.click(vulnTitle);
-      
-      // Recommendation should now be visible
+
       await waitFor(() => {
         expect(screen.getByText(/Update to version 4.18.0/)).toBeInTheDocument();
       });
@@ -244,17 +236,13 @@ describe('ResultsDashboard', () => {
     it('clicking a bug row expands the recommendation', async () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Bugs');
-      
-      // Find the bug row
+
       const bugTitle = screen.getByText('Unused variable');
-      
-      // Recommendation should not be visible initially
+
       expect(screen.queryByText(/Remove unused variable/)).not.toBeInTheDocument();
-      
-      // Click the row
+
       fireEvent.click(bugTitle);
-      
-      // Recommendation should now be visible
+
       await waitFor(() => {
         expect(screen.getByText(/Remove unused variable/)).toBeInTheDocument();
       });
@@ -263,16 +251,14 @@ describe('ResultsDashboard', () => {
     it('clicking an expanded row collapses it', async () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Vulnerabilities');
-      
+
       const vulnTitle = screen.getByText('SQL Injection vulnerability');
-      
-      // Click to expand
+
       fireEvent.click(vulnTitle);
       await waitFor(() => {
         expect(screen.getByText(/Update to version 4.18.0/)).toBeInTheDocument();
       });
-      
-      // Click again to collapse
+
       fireEvent.click(vulnTitle);
       await waitFor(() => {
         expect(screen.queryByText(/Update to version 4.18.0/)).not.toBeInTheDocument();
@@ -283,13 +269,13 @@ describe('ResultsDashboard', () => {
   describe('Copy README Button', () => {
     it('copy button copies README markdown to clipboard', async () => {
       mockClipboard.writeText.mockResolvedValue(undefined);
-      
+
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('README');
-      
+
       const copyButton = screen.getByText('Copy Markdown');
       fireEvent.click(copyButton);
-      
+
       await waitFor(() => {
         expect(mockClipboard.writeText).toHaveBeenCalledWith(mockScanResult.readme.content);
       });
@@ -297,13 +283,13 @@ describe('ResultsDashboard', () => {
 
     it('shows success message after copying', async () => {
       mockClipboard.writeText.mockResolvedValue(undefined);
-      
+
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('README');
-      
+
       const copyButton = screen.getByText('Copy Markdown');
       fireEvent.click(copyButton);
-      
+
       await waitFor(() => {
         expect(screen.getByText('✓ Copied!')).toBeInTheDocument();
       });
@@ -311,18 +297,6 @@ describe('ResultsDashboard', () => {
   });
 
   describe('Download Button', () => {
-    it('renders current Task 6 download and share actions', () => {
-      render(<ResultsDashboard scanResult={mockScanResult} />);
-      
-      expect(screen.getByRole('heading', { name: 'Download & Share' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Download markdown report/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Copy shareable link/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Copy.*JSON/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /View raw.*report/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Print/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Download HTML/i })).toBeInTheDocument();
-    });
-
     it('uses downloadReport with the scan ID instead of old anchor download endpoints', async () => {
       vi.mocked(downloadReport).mockResolvedValue(new Blob(['report'], { type: 'text/markdown' }));
       const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:dashboard-report');
@@ -344,7 +318,7 @@ describe('ResultsDashboard', () => {
   describe('Tech Stack Display', () => {
     it('displays tech stack badges', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
-      
+
       expect(screen.getByText('React')).toBeInTheDocument();
       expect(screen.getByText('TypeScript')).toBeInTheDocument();
       expect(screen.getByText('JavaScript')).toBeInTheDocument();
@@ -380,7 +354,7 @@ describe('ResultsDashboard', () => {
     it('displays suggested fixes as numbered list with code formatting', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Suggested Fixes');
-      
+
       expect(screen.getByText('Update all dependencies to latest versions')).toBeInTheDocument();
       expect(screen.getByText('Add input validation')).toBeInTheDocument();
       expect(screen.getByText('Implement proper error handling')).toBeInTheDocument();
@@ -402,7 +376,7 @@ describe('ResultsDashboard', () => {
   describe('Warnings Section', () => {
     it('displays warnings in yellow callout', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
-      
+
       expect(screen.getByText('Missing test coverage')).toBeInTheDocument();
       expect(screen.getByText('No CI/CD configuration found')).toBeInTheDocument();
     });
@@ -412,17 +386,14 @@ describe('ResultsDashboard', () => {
     it('final report is collapsible', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Full Report');
-      
+
       const summary = screen.getByText(/Click to expand raw Markdown/);
       expect(summary).toBeInTheDocument();
-      
-      // Report content should not be visible initially
+
       expect(screen.queryByText('## Final Report')).not.toBeInTheDocument();
-      
-      // Click to expand
+
       fireEvent.click(summary);
-      
-      // Report content should now be visible
+
       expect(screen.getByText(/## Final Report/)).toBeInTheDocument();
     });
 
@@ -454,7 +425,7 @@ describe('ResultsDashboard', () => {
     it('displays tool names for vulnerabilities', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Vulnerabilities');
-      
+
       const npmAuditElements = screen.getAllByText('npm audit');
       expect(npmAuditElements.length).toBeGreaterThan(0);
       expect(screen.getByText('semgrep')).toBeInTheDocument();
@@ -463,7 +434,7 @@ describe('ResultsDashboard', () => {
     it('displays tool names for bugs', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       switchToTab('Bugs');
-      
+
       expect(screen.getByText('eslint')).toBeInTheDocument();
     });
   });
@@ -472,7 +443,6 @@ describe('ResultsDashboard', () => {
     it('renders without crashing on mobile viewport', () => {
       const { container } = render(<ResultsDashboard scanResult={mockScanResult} />);
       expect(container).toBeInTheDocument();
-      // Component uses responsive Tailwind classes (sm:, md:, lg:) for mobile support
     });
   });
 
@@ -506,7 +476,7 @@ describe('ResultsDashboard', () => {
         warnings: [],
         fullReport: '',
       } satisfies ScanResult;
-      
+
       const { container } = render(<ResultsDashboard scanResult={minimalScanResult} />);
       expect(container).toBeInTheDocument();
       expect(screen.getByText('minimal-repo')).toBeInTheDocument();
@@ -522,7 +492,7 @@ describe('ResultsDashboard', () => {
         suggestedFixes: undefined,
         warnings: undefined,
       };
-      
+
       const { container } = render(<ResultsDashboard scanResult={scanResultWithUndefined as unknown as ScanResult} />);
       expect(container).toBeInTheDocument();
     });

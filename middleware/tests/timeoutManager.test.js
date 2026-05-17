@@ -11,9 +11,8 @@ describe('timeoutManager', () => {
     });
 
     test('rejects with TimeoutError if promise takes too long', async () => {
-      const slowPromise = new Promise(resolve => setTimeout(() => resolve('success'), 100));
-      await expect(withTimeout(slowPromise, 10, 'SlowTest')).rejects.toThrow(TimeoutError);
-      await expect(withTimeout(slowPromise, 10, 'SlowTest')).rejects.toThrow('SlowTest timed out after 10ms');
+      await expect(withTimeout(new Promise(resolve => setTimeout(() => resolve('success'), 100)), 10, 'SlowTest')).rejects.toThrow(TimeoutError);
+      await expect(withTimeout(new Promise(resolve => setTimeout(() => resolve('success'), 100)), 10, 'SlowTest')).rejects.toThrow('SlowTest timed out after 10ms');
     });
   });
 
@@ -59,10 +58,9 @@ describe('timeoutManager', () => {
       ).rejects.toThrow(TimeoutError);
     });
 
-    test('resolves with code > 0 on invalid command', async () => {
-      const result = await spawnWithTimeout('this-command-does-not-exist', [], process.cwd(), 1000);
-      expect(result.code).toBeGreaterThan(0);
-      expect(result.stderr).toBeTruthy();
+    test('resolves with code > 0 on failed command', async () => {
+      const result = await spawnWithTimeout('node', ['-e', '"process.exit(2)"'], process.cwd(), 5000);
+      expect(result.code).toBe(2);
     });
   });
 

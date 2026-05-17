@@ -56,7 +56,7 @@ const BUILTIN_PATTERNS = [
   // GitHub tokens
   {
     name: 'GitHub Token',
-    pattern: /gh[pousr]_[A-Za-z0-9_]{36,255}/gi,
+    pattern: /gh[pousr]_[A-Za-z0-9_]{20,255}/gi,
   },
   // Slack tokens
   {

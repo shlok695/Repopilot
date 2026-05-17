@@ -102,9 +102,18 @@ app.use('/api/health', healthRouter);
 app.use('/api/scan', scanRouter);
 app.use('/api/scans', scanRouter);
 
+// Tailscale Serve strips matched path prefixes when proxying /api to this server.
+// Keep these aliases so public /api/* requests resolve after that prefix is removed.
+app.use('/health', healthRouter);
+app.use('/scan', scanRouter);
+app.use('/scans', scanRouter);
+
 // Standalone metrics endpoint (also available at /api/health/metrics)
 import { getMetrics } from './utils/metrics.js';
 app.get('/api/metrics', (_req, res) => {
+  res.json(getMetrics());
+});
+app.get('/metrics', (_req, res) => {
   res.json(getMetrics());
 });
 

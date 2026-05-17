@@ -166,24 +166,6 @@ export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
     }
   });
 
-  addFix('Validate user inputs', 'Add validation for all user-facing endpoints and functions.', {
-    type: 'improvement',
-    priority: 'medium',
-    effort: 'medium',
-  });
-  addFix('Add or improve tests', 'Add unit and integration tests for critical behavior and scan high-risk paths in CI.', {
-    type: 'improvement',
-    priority: 'medium',
-    effort: 'high',
-    docs: 'https://jestjs.io/docs/getting-started',
-  });
-  addFix('Automate dependency review', 'Enable Dependabot or a similar tool for recurring dependency and security update checks.', {
-    type: 'improvement',
-    priority: 'low',
-    effort: 'low',
-    docs: 'https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates',
-  });
-
   return Array.from(fixes.values());
 };
 

@@ -51,4 +51,9 @@ coverage/
 .cache/
 Repopilot/
 
+#tools
+
+.tools/
+tmp-vuln-smoke/
+
 # Made with Bob

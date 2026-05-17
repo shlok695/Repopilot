@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ResultsDashboard from '../components/ResultsDashboard';
@@ -7,11 +7,25 @@ import ErrorBanner from '../components/ErrorBanner';
 import { getScanResult } from '../api/scanApi';
 import { ScanResult } from '../types/scan';
 
+const LOCALSTORAGE_KEY = 'repopilot:lastScanResult';
+
 const Results: React.FC = () => {
   const { scanId } = useParams<{ scanId: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDashboard, setShowDashboard] = useState(false);
+
+  useEffect(() => {
+    // Set document title
+    document.title = 'RepoPilot';
+
+    return () => {
+      document.title = 'RepoPilot';
+    };
+  }, []);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -21,6 +35,33 @@ const Results: React.FC = () => {
         return;
       }
 
+      // First, check if result was passed via navigation state
+      const stateResult = (location.state as any)?.scanResult;
+      if (stateResult) {
+        setScanResult(stateResult);
+        setIsLoading(false);
+        // Trigger slide-in animation
+        setTimeout(() => setShowDashboard(true), 50);
+        return;
+      }
+
+      // Second, try to load from localStorage
+      try {
+        const storedResult = localStorage.getItem(LOCALSTORAGE_KEY);
+        if (storedResult) {
+          const parsedResult = JSON.parse(storedResult) as ScanResult;
+          if (parsedResult.scanId === scanId) {
+            setScanResult(parsedResult);
+            setIsLoading(false);
+            setTimeout(() => setShowDashboard(true), 50);
+            return;
+          }
+        }
+      } catch (storageErr) {
+        console.warn('Failed to load from localStorage:', storageErr);
+      }
+
+      // Finally, fetch from API
       try {
         const result = await getScanResult(scanId);
         setScanResult(result);
@@ -30,6 +71,7 @@ const Results: React.FC = () => {
           setTimeout(fetchResults, 3000);
         } else {
           setIsLoading(false);
+          setTimeout(() => setShowDashboard(true), 50);
         }
       } catch (err: any) {
         setError(err.response?.data?.message || (err.request ? 'Backend is not reachable. Please check the server.' : 'Scan failed. Please try again.'));
@@ -38,7 +80,7 @@ const Results: React.FC = () => {
     };
 
     fetchResults();
-  }, [scanId]);
+  }, [scanId, location.state]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -64,7 +106,15 @@ const Results: React.FC = () => {
         )}
 
         {scanResult && scanResult.status === 'completed' && (
-          <ResultsDashboard scanResult={scanResult} />
+          <div
+            className={`transition-all duration-500 ${
+              showDashboard
+                ? 'opacity-100 translate-y-0'
+                : 'opacity-0 translate-y-6'
+            }`}
+          >
+            <ResultsDashboard scanResult={scanResult} />
+          </div>
         )}
 
         {scanResult && scanResult.status === 'failed' && (
@@ -72,6 +122,24 @@ const Results: React.FC = () => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
               <h2 className="text-xl font-semibold text-red-800 mb-2">Scan Failed</h2>
               <p className="text-red-700">{scanResult.error || 'An unknown error occurred'}</p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !scanResult && !error && (
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+              <div className="text-6xl mb-4">📊</div>
+              <h2 className="text-2xl font-semibold text-gray-800 mb-2">No Scan Result Found</h2>
+              <p className="text-gray-600 mb-6">
+                No scan result found. Please start a new scan.
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                New Scan
+              </button>
             </div>
           </div>
         )}

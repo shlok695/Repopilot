@@ -1,28 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import ScanForm from '../components/ScanForm';
 import ErrorBanner from '../components/ErrorBanner';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingProgress from '../components/LoadingProgress';
 import { startScan } from '../api/scanApi';
 import { ScanPayload } from '../types/scan';
+
+const LOCALSTORAGE_KEY = 'repopilot:lastScanResult';
+const COMPLETION_DELAY_MS = 500;
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isScanCompleted, setIsScanCompleted] = useState(false);
+  const [repoName, setRepoName] = useState<string>('');
+
+  useEffect(() => {
+    // Set initial document title
+    document.title = 'RepoPilot';
+
+    return () => {
+      // Cleanup: restore title on unmount
+      document.title = 'RepoPilot';
+    };
+  }, []);
+
+  useEffect(() => {
+    // Update document title when loading
+    if (isLoading) {
+      const displayName = repoName || 'repository';
+      document.title = `Scanning ${displayName}...`;
+    } else {
+      document.title = 'RepoPilot';
+    }
+  }, [isLoading, repoName]);
+
+  const extractRepoName = (payload: ScanPayload): string => {
+    if (payload.type === 'github' && payload.repoUrl) {
+      // Extract repo name from GitHub URL
+      // e.g., https://github.com/facebook/react -> facebook/react
+      const match = payload.repoUrl.match(/github\.com\/([^/]+\/[^/]+)/);
+      return match ? match[1] : 'repository';
+    } else if (payload.type === 'zip' && payload.file) {
+      // Use ZIP filename without extension
+      return payload.file.name.replace(/\.zip$/i, '');
+    }
+    return 'repository';
+  };
 
   const handleScanSubmit = async (payload: ScanPayload) => {
     setError(null);
     setIsLoading(true);
+    setIsScanCompleted(false);
+    
+    // Extract and set repo name for display
+    const extractedName = extractRepoName(payload);
+    setRepoName(extractedName);
 
     try {
       const result = await startScan(payload);
-      navigate(`/results/${result.scanId}`);
+      setIsScanCompleted(true);
+      await new Promise((resolve) => setTimeout(resolve, COMPLETION_DELAY_MS));
+      setIsLoading(false);
+      document.title = 'RepoPilot';
+      
+      // Save result to localStorage
+      try {
+        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(result));
+      } catch (storageErr) {
+        console.warn('Failed to save scan result to localStorage:', storageErr);
+      }
+
+      // Navigate to results
+      navigate(`/results/${result.scanId}`, { state: { scanResult: result } });
     } catch (err: any) {
       setError(err.response?.data?.message || (err.request ? 'Backend is not reachable. Please check the server.' : 'Scan failed. Please try again.'));
       setIsLoading(false);
+      setIsScanCompleted(false);
+      document.title = 'RepoPilot';
     }
+  };
+
+  const handleCancelScan = () => {
+    setIsLoading(false);
+    setIsScanCompleted(false);
+    setRepoName('');
+    document.title = 'RepoPilot';
   };
 
   return (
@@ -58,7 +123,11 @@ const Home: React.FC = () => {
 
           {isLoading && (
             <div className="mt-6">
-              <LoadingSpinner />
+              <LoadingProgress
+                repoName={repoName}
+                onCancel={handleCancelScan}
+                completed={isScanCompleted}
+              />
             </div>
           )}
 

@@ -1,97 +1,194 @@
 import React, { useState, useEffect } from 'react';
 
-const LoadingProgress: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [showWarning, setShowWarning] = useState(false);
+interface LoadingProgressProps {
+  repoName?: string;
+  onCancel?: () => void;
+  completed?: boolean;
+}
 
-  const steps = [
-    { label: 'Analyzing repository', icon: '🔍' },
-    { label: 'Generating README', icon: '📝' },
-    { label: 'Scanning vulnerabilities', icon: '🔒' },
-    { label: 'Detecting bugs', icon: '🐛' },
-    { label: 'Building report', icon: '📊' },
-  ];
+type StepStatus = 'pending' | 'in-progress' | 'done';
+
+interface ScanStep {
+  id: number;
+  label: string;
+  status: StepStatus;
+}
+
+const SCAN_STEPS: Omit<ScanStep, 'status'>[] = [
+  { id: 1, label: 'Analyzing repository...' },
+  { id: 2, label: 'Generating README...' },
+  { id: 3, label: 'Scanning vulnerabilities...' },
+  { id: 4, label: 'Detecting bugs...' },
+  { id: 5, label: 'Building report...' },
+];
+
+const STEP_INTERVAL = 5000; // 5 seconds
+const WARNING_30S = 30000; // 30 seconds
+const WARNING_60S = 60000; // 60 seconds
+
+const getInitialSteps = (): ScanStep[] =>
+  SCAN_STEPS.map((step, index) => ({
+    ...step,
+    status: index === 0 ? 'in-progress' : 'pending',
+  }));
+
+const getCompletedSteps = (): ScanStep[] =>
+  SCAN_STEPS.map((step) => ({
+    ...step,
+    status: 'done',
+  }));
+
+export const loadingProgressActions = {
+  reloadPage: () => window.location.reload(),
+};
+
+const LoadingProgress: React.FC<LoadingProgressProps> = ({ repoName, onCancel, completed = false }) => {
+  const [steps, setSteps] = useState<ScanStep[]>(() =>
+    completed ? getCompletedSteps() : getInitialSteps()
+  );
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [show30sWarning, setShow30sWarning] = useState(false);
+  const [show60sWarning, setShow60sWarning] = useState(false);
 
   useEffect(() => {
-    const stepInterval = setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev < steps.length - 1) {
-          return prev + 1;
-        }
-        return prev;
-      });
-    }, 5000);
+    if (completed) {
+      setSteps(getCompletedSteps());
+      return;
+    }
 
-    const warningTimeout = setTimeout(() => {
-      setShowWarning(true);
-    }, 30000);
+    // Timer for elapsed time tracking
+    const timeInterval = setInterval(() => {
+      setElapsedTime((prev) => prev + 1000);
+    }, 1000);
+
+    // Timer for step progression
+    const stepInterval = setInterval(() => {
+      setSteps((currentSteps) => {
+        const currentInProgressIndex = currentSteps.findIndex(
+          (step) => step.status === 'in-progress'
+        );
+
+        if (currentInProgressIndex === -1) {
+          return currentSteps;
+        }
+
+        // Mark current step as done
+        const newSteps = [...currentSteps];
+        newSteps[currentInProgressIndex].status = 'done';
+
+        // Move to next step if available
+        if (currentInProgressIndex < newSteps.length - 1) {
+          newSteps[currentInProgressIndex + 1].status = 'in-progress';
+        }
+
+        return newSteps;
+      });
+    }, STEP_INTERVAL);
 
     return () => {
+      clearInterval(timeInterval);
       clearInterval(stepInterval);
-      clearTimeout(warningTimeout);
     };
-  }, []);
+  }, [completed]);
+
+  useEffect(() => {
+    if (elapsedTime >= WARNING_30S && !show30sWarning) {
+      setShow30sWarning(true);
+    }
+    if (elapsedTime >= WARNING_60S && !show60sWarning) {
+      setShow60sWarning(true);
+    }
+  }, [elapsedTime, show30sWarning, show60sWarning]);
+
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      loadingProgressActions.reloadPage();
+    }
+  };
+
+  const getStepIcon = (status: StepStatus): string => {
+    switch (status) {
+      case 'done':
+        return '✅';
+      case 'in-progress':
+        return '🔄';
+      case 'pending':
+        return '⏳';
+      default:
+        return '⏳';
+    }
+  };
+
+  const displayRepoName = repoName || 'repository';
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-8">
-      <div className="text-center mb-8">
-        <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mb-4"></div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Scanning Repository</h2>
-        <p className="text-gray-600">This may take a few moments...</p>
+    <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl mx-auto">
+      {/* Header with spinner */}
+      <div className="text-center mb-6">
+        <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-t-4 border-blue-600 mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          Scanning {displayRepoName}...
+        </h2>
+        <p className="text-gray-600">This usually takes 15–45 seconds</p>
       </div>
 
-      {showWarning && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-start">
-            <span className="text-2xl mr-3">⚠️</span>
-            <div>
-              <h3 className="font-semibold text-yellow-800">Large repository detected</h3>
-              <p className="text-sm text-yellow-700">
-                This scan is taking longer than usual. Please be patient.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {steps.map((step, index) => (
+      {/* Progress Steps */}
+      <div className="space-y-3 mb-6">
+        {steps.map((step) => (
           <div
-            key={index}
-            className={`flex items-center p-4 rounded-lg transition-all ${
-              index === currentStep
-                ? 'bg-blue-50 border-2 border-blue-500'
-                : index < currentStep
-                ? 'bg-green-50 border-2 border-green-500'
-                : 'bg-gray-50 border-2 border-gray-200'
+            key={step.id}
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+              step.status === 'in-progress'
+                ? 'bg-blue-50 border border-blue-200'
+                : step.status === 'done'
+                ? 'bg-green-50 border border-green-200'
+                : 'bg-gray-50 border border-gray-200'
             }`}
           >
-            <span className="text-3xl mr-4">{step.icon}</span>
-            <div className="flex-1">
-              <p
-                className={`font-medium ${
-                  index === currentStep
-                    ? 'text-blue-900'
-                    : index < currentStep
-                    ? 'text-green-900'
-                    : 'text-gray-500'
-                }`}
-              >
-                {step.label}
-              </p>
-            </div>
-            {index < currentStep && (
-              <span className="text-green-600 text-xl">✓</span>
-            )}
-            {index === currentStep && (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            )}
+            <span className="text-2xl">{getStepIcon(step.status)}</span>
+            <span
+              className={`text-sm font-medium ${
+                step.status === 'in-progress'
+                  ? 'text-blue-900'
+                  : step.status === 'done'
+                  ? 'text-green-900'
+                  : 'text-gray-600'
+              }`}
+            >
+              {step.label}
+            </span>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 text-center text-sm text-gray-500">
-        <p>Step {currentStep + 1} of {steps.length}</p>
+      {/* 30 second warning */}
+      {show30sWarning && !show60sWarning && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+          <p className="text-sm text-yellow-800 font-medium">
+            ⚠️ Large repo detected — still working...
+          </p>
+        </div>
+      )}
+
+      {/* 60 second warning */}
+      {show60sWarning && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-300 rounded-lg">
+          <p className="text-sm text-red-800 font-medium">
+            ⚠️ This is taking longer than usual. You can wait or cancel.
+          </p>
+        </div>
+      )}
+
+      {/* Cancel Button */}
+      <div className="text-center">
+        <button
+          onClick={handleCancel}
+          className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
+        >
+          Cancel Scan
+        </button>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { createReadStream } from 'fs';
+import { createReadStream, createWriteStream } from 'fs';
 import { unlink } from 'fs/promises';
 import { join, posix } from 'path';
 import { readdirSync, statSync, existsSync, mkdirSync } from 'fs';
@@ -87,7 +87,7 @@ export const extractZip = async (zipPath: string, scanId: string): Promise<strin
           if (!existsSync(parentDir)) {
             mkdirSync(parentDir, { recursive: true });
           }
-          entry.pipe(require('fs').createWriteStream(fullPath));
+          entry.pipe(createWriteStream(fullPath));
         }
       });
 

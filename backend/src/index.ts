@@ -39,6 +39,8 @@ const PORT = process.env.PORT || 5000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
 
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet());
 app.use(requestId); // Add X-Request-ID to all responses

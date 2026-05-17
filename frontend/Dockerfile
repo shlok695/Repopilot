@@ -1,38 +1,21 @@
-# Build stage
 FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy source code
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Production stage
-FROM node:18-alpine
+FROM nginx:1.27-alpine
 
-WORKDIR /app
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy package files
-COPY package*.json ./
+EXPOSE 80
 
-# Install dependencies needed by `npm run preview`.
-RUN npm ci
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1/health || exit 1
 
-# Copy built assets from builder
-COPY --from=builder /app/dist ./dist
-
-# Expose port
-EXPOSE 3000
-
-# Start the application using vite preview
-CMD ["npm", "run", "preview"]
-
-# Made with Bob
+CMD ["nginx", "-g", "daemon off;"]

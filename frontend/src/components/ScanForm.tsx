@@ -6,7 +6,8 @@ interface ScanFormProps {
   isLoading: boolean;
 }
 
-const MAX_ZIP_SIZE_MB = 25;
+const MAX_ZIP_SIZE_MB = 100;
+const ZIP_TOO_LARGE_MESSAGE = 'ZIP file is too large. Please upload a file smaller than 100 MB.';
 
 const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
   const [scanType, setScanType] = useState<'github' | 'zip'>('github');
@@ -14,6 +15,7 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
   const [file, setFile] = useState<File | null>(null);
   const [urlError, setUrlError] = useState('');
   const [fileError, setFileError] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const isMockMode = import.meta.env.VITE_MOCK_API === 'true';
 
   const validateGitHubUrl = (url: string): boolean => {
@@ -33,25 +35,48 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
     return true;
   };
 
+  const validateAndSetFile = (selectedFile?: File) => {
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
+      setFileError('Please upload a valid .zip file.');
+      setFile(null);
+      return;
+    }
+
+    if (selectedFile.size > MAX_ZIP_SIZE_MB * 1024 * 1024) {
+      setFileError(ZIP_TOO_LARGE_MESSAGE);
+      setFile(null);
+      return;
+    }
+
+    setFileError('');
+    setFile(selectedFile);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      // Check if ZIP file
-      if (!selectedFile.name.endsWith('.zip')) {
-        setFileError('Please upload a ZIP file.');
-        setFile(null);
-        return;
-      }
+    validateAndSetFile(e.target.files?.[0]);
+  };
 
-      // Check file size
-      if (selectedFile.size > MAX_ZIP_SIZE_MB * 1024 * 1024) {
-        setFileError('ZIP file exceeds 25 MB limit. Please use a smaller repo.');
-        setFile(null);
-        return;
-      }
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (!isLoading) {
+      setIsDragging(true);
+    }
+  };
 
-      setFileError('');
-      setFile(selectedFile);
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (!isLoading) {
+      validateAndSetFile(e.dataTransfer.files?.[0]);
     }
   };
 
@@ -74,6 +99,9 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <p className="text-sm text-gray-600 dark:text-gray-300">
+        Paste a public GitHub repository URL or upload a ZIP file up to 100 MB.
+      </p>
       {/* Scan Type Toggle */}
       <div>
         <fieldset>
@@ -155,7 +183,16 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
           <label htmlFor="zipFile" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Upload ZIP File
           </label>
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-white dark:bg-gray-700">
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors ${
+              isDragging
+                ? 'border-cyan-400 bg-cyan-50 dark:border-cyan-400 dark:bg-cyan-950/40'
+                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
+            }`}
+          >
             <div className="space-y-1 text-center">
               <svg
                 className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
@@ -191,7 +228,12 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
                 </label>
                 <p className="pl-1">or drag and drop</p>
               </div>
-              <p id="file-hint" className="text-xs text-gray-500 dark:text-gray-400">ZIP files up to 25MB</p>
+              <p id="file-hint" className="text-xs text-gray-500 dark:text-gray-400">ZIP files up to 100 MB</p>
+              {isDragging && (
+                <p className="text-sm font-medium text-cyan-700 dark:text-cyan-300" role="status">
+                  Drop your ZIP file to attach it.
+                </p>
+              )}
             </div>
           </div>
           {file && (

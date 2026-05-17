@@ -55,7 +55,7 @@ describe('ShareActions', () => {
   it('renders all share action buttons', () => {
     render(<ShareActions scanResult={mockScanResult} />);
     
-    expect(screen.getByText(/Download Report/i)).toBeInTheDocument();
+    expect(screen.getByText(/Download Full Report/i)).toBeInTheDocument();
     expect(screen.getByText(/Copy Shareable Link/i)).toBeInTheDocument();
     expect(screen.getByText(/Copy as JSON/i)).toBeInTheDocument();
     expect(screen.getByText(/View Raw Report/i)).toBeInTheDocument();

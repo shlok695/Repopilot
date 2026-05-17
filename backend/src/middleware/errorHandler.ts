@@ -41,7 +41,7 @@ export const errorHandler = (
   if (err.name === 'MulterError') {
     if (err.message === 'File too large') {
       return res.status(413).json({
-        error: 'ZIP exceeds 25 MB limit',
+        error: 'ZIP file is too large. Please upload a file smaller than 100 MB.',
         ...(isDevelopment && { stack: err.stack }),
       });
     }

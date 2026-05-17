@@ -138,16 +138,16 @@ describe('ResultsDashboard', () => {
       expect(screen.getByText('test-repo')).toBeInTheDocument();
     });
 
-    it('shows "No vulnerabilities found" when vulnerabilities array is empty', () => {
+    it('shows the security empty state when vulnerabilities array is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
       switchToTab('Vulnerabilities');
-      expect(screen.getByText('No vulnerabilities found')).toBeInTheDocument();
+      expect(screen.getByText('No high-risk secrets detected')).toBeInTheDocument();
     });
 
-    it('shows "No bugs found" when bugs array is empty', () => {
+    it('shows the code quality empty state when bugs array is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
       switchToTab('Bugs');
-      expect(screen.getByText('No bugs found')).toBeInTheDocument();
+      expect(screen.getByText('No code quality blockers found')).toBeInTheDocument();
     });
 
     it('shows "No fixes suggested" when suggestedFixes array is empty', () => {
@@ -509,7 +509,7 @@ describe('ResultsDashboard', () => {
       const { container } = render(<ResultsDashboard scanResult={scanResultWithOptionalFields} />);
 
       expect(container).toBeInTheDocument();
-      expect(screen.getByText('failed')).toBeInTheDocument();
+      expect(screen.getAllByText('failed').length).toBeGreaterThan(0);
       expect(screen.getByText('2026-05-16T00:01:00.000Z')).toBeInTheDocument();
       expect(screen.getByText('Scan failed while reading repository metadata')).toBeInTheDocument();
       expect(screen.queryByText('undefined')).not.toBeInTheDocument();

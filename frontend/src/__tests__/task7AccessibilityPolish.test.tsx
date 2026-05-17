@@ -47,7 +47,7 @@ describe('Task 7 Accessibility & Polish', () => {
   it('footer renders expected hackathon text', () => {
     render(<Footer />);
 
-    expect(screen.getByText('Built at Hackathon 2024 | Powered by RepoPilot')).toBeInTheDocument();
+    expect(screen.getByText('Built at Hackathon 2026 | Powered by RepoPilot')).toBeInTheDocument();
   });
 
   it('results tabs expose tab roles and selected state', () => {

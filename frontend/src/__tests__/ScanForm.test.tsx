@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ScanForm from '../components/ScanForm';
 
@@ -113,7 +113,7 @@ describe('ScanForm', () => {
     
     // Should show error
     await waitFor(() => {
-      expect(screen.getByText(/Please upload a ZIP file/i)).toBeInTheDocument();
+      expect(screen.getByText(/Please upload a valid \.zip file/i)).toBeInTheDocument();
     });
   });
 
@@ -196,11 +196,11 @@ describe('ScanForm', () => {
     
     // Should show error
     await waitFor(() => {
-      expect(screen.getByText(/Please upload a ZIP file/i)).toBeInTheDocument();
+      expect(screen.getByText(/Please upload a valid \.zip file/i)).toBeInTheDocument();
     });
   });
 
-  it('shows validation error for ZIP file exceeding 25 MB', async () => {
+  it('shows validation error for ZIP file exceeding 100 MB', async () => {
     const user = userEvent.setup({ applyAccept: false });
     const mockOnSubmit = vi.fn();
     render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
@@ -209,9 +209,10 @@ describe('ScanForm', () => {
     const zipButton = screen.getByRole('button', { name: /ZIP Upload/i });
     await user.click(zipButton);
     
-    // Create a mock file larger than 25 MB
-    const largeContent = new Array(26 * 1024 * 1024).fill('a').join('');
+    // Create a mock file larger than 100 MB without allocating the full contents
+    const largeContent = new Array(1024).fill('a').join('');
     const file = new File([largeContent], 'large-repo.zip', { type: 'application/zip' });
+    Object.defineProperty(file, 'size', { value: 101 * 1024 * 1024 });
     const input = screen.getByLabelText(/Upload ZIP File/i);
     
     // Upload file
@@ -219,12 +220,36 @@ describe('ScanForm', () => {
     
     // Should show error
     await waitFor(() => {
-      expect(screen.getByText(/ZIP file exceeds 25 MB limit/i)).toBeInTheDocument();
+      expect(screen.getByText(/ZIP file is too large/i)).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole('button', { name: /Start repository scan/i }));
 
     expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  it('accepts ZIP files by drag and drop', async () => {
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /ZIP Upload/i }));
+
+    const file = new File(['content'], 'dropped-repo.zip', { type: 'application/zip' });
+    const dropZone = screen.getByText(/or drag and drop/i).closest('div')?.parentElement;
+    expect(dropZone).toBeTruthy();
+
+    fireEvent.dragOver(dropZone as HTMLElement, {
+      dataTransfer: { files: [file] },
+    });
+    expect(screen.getByText(/Drop your ZIP file/i)).toBeInTheDocument();
+
+    fireEvent.drop(dropZone as HTMLElement, {
+      dataTransfer: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Selected: dropped-repo.zip');
+    });
   });
 
   it('shows validation error when submitting without selecting a file', async () => {

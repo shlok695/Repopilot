@@ -14,6 +14,27 @@ const apiClient = axios.create({
   },
 });
 
+const PRIVATE_REPO_MESSAGE =
+  'This repository appears to be private or unavailable. Please use a public GitHub repository or upload a ZIP file instead.';
+
+const ZIP_TOO_LARGE_MESSAGE = 'ZIP file is too large. Please upload a file smaller than 100 MB.';
+
+const isPrivateOrUnavailableRepoError = (message?: string, status?: number): boolean => {
+  const text = (message || '').toLowerCase();
+  return (
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    text.includes('authentication') ||
+    text.includes('repository not found') ||
+    text.includes('not found') ||
+    text.includes('clone failed') ||
+    text.includes('permission denied') ||
+    text.includes('inaccessible') ||
+    text.includes('private')
+  );
+};
+
 // Centralized error handler
 export const handleApiError = (error: unknown): never => {
   console.error('API Error:', error);
@@ -35,17 +56,21 @@ export const handleApiError = (error: unknown): never => {
   // Extract error message from various possible response shapes
   const backendMessage = data?.message || data?.error || data?.detail;
 
+  if (isPrivateOrUnavailableRepoError(backendMessage, status)) {
+    throw new Error(PRIVATE_REPO_MESSAGE);
+  }
+
   switch (status) {
     case 400:
       throw new Error(backendMessage || 'Invalid request. Please check your input.');
     case 413:
-      throw new Error('ZIP file exceeds 25 MB limit. Please use a smaller repo.');
+      throw new Error(ZIP_TOO_LARGE_MESSAGE);
     case 429:
       throw new Error('Rate limit reached. Try again in 60 seconds.');
     case 503:
       throw new Error('Scan timed out. Try a smaller repository.');
     case 500:
-      throw new Error('Something went wrong on our end. Check backend logs.');
+      throw new Error('Something went wrong while scanning. Please try a public repository or upload a ZIP file.');
     default:
       throw new Error('Scan failed. Please try again.');
   }

@@ -17,18 +17,19 @@ describe('LoadingProgress', () => {
 
     expect(screen.getByText(/Scanning Repository/i)).toBeInTheDocument();
     expect(screen.getByText(/This may take a few moments/i)).toBeInTheDocument();
-    expect(screen.getByText(/Analyzing repository/i)).toBeInTheDocument();
-    expect(screen.getByText(/Generating README/i)).toBeInTheDocument();
-    expect(screen.getByText(/Scanning vulnerabilities/i)).toBeInTheDocument();
-    expect(screen.getByText(/Detecting bugs/i)).toBeInTheDocument();
-    expect(screen.getByText(/Building report/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repository received/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dependencies detected/i)).toBeInTheDocument();
+    expect(screen.getByText(/Security scan running/i)).toBeInTheDocument();
+    expect(screen.getByText(/Code quality scan running/i)).toBeInTheDocument();
+    expect(screen.getByText(/README\/report generated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Final report ready/i)).toBeInTheDocument();
   });
 
   it('starts with first step active', () => {
     render(<LoadingProgress />);
 
     const firstStep = screen.getByTestId('loading-step-0');
-    expect(firstStep).toHaveClass('bg-blue-50');
+    expect(firstStep).toHaveClass('bg-cyan-50');
   });
 
   it('advances progress steps every 5 seconds', () => {
@@ -36,7 +37,7 @@ describe('LoadingProgress', () => {
 
     // Initially first step is active
     let firstStep = screen.getByTestId('loading-step-0');
-    expect(firstStep).toHaveClass('bg-blue-50');
+    expect(firstStep).toHaveClass('bg-cyan-50');
 
     // After 5 seconds, second step should be active
     act(() => {
@@ -46,7 +47,7 @@ describe('LoadingProgress', () => {
     firstStep = screen.getByTestId('loading-step-0');
     const secondStep = screen.getByTestId('loading-step-1');
     expect(firstStep).toHaveClass('bg-green-50');
-    expect(secondStep).toHaveClass('bg-blue-50');
+    expect(secondStep).toHaveClass('bg-cyan-50');
 
     // After another 5 seconds, third step should be active
     act(() => {
@@ -55,7 +56,7 @@ describe('LoadingProgress', () => {
 
     const thirdStep = screen.getByTestId('loading-step-2');
     expect(secondStep).toHaveClass('bg-green-50');
-    expect(thirdStep).toHaveClass('bg-blue-50');
+    expect(thirdStep).toHaveClass('bg-cyan-50');
   });
 
   it('shows warning after 30 seconds', () => {
@@ -74,13 +75,13 @@ describe('LoadingProgress', () => {
   it('displays step counter', () => {
     render(<LoadingProgress />);
 
-    expect(screen.getByText(/Step 1 of 5/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 6/i)).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(5000);
     });
 
-    expect(screen.getByText(/Step 2 of 5/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 6/i)).toBeInTheDocument();
   });
 
   it('shows checkmarks for completed steps', () => {

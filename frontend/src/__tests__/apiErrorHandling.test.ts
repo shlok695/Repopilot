@@ -66,7 +66,7 @@ describe('API Error Handling', () => {
       vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
 
       expect(() => handleApiError(error)).toThrow(
-        'ZIP file exceeds 25 MB limit. Please use a smaller repo.'
+        'ZIP file is too large. Please upload a file smaller than 100 MB.'
       );
     });
 
@@ -114,7 +114,23 @@ describe('API Error Handling', () => {
       vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
 
       expect(() => handleApiError(error)).toThrow(
-        'Something went wrong on our end. Check backend logs.'
+        'Something went wrong while scanning. Please try a public repository or upload a ZIP file.'
+      );
+    });
+
+    it('should show a friendly message for private or unavailable repos', () => {
+      const error = {
+        isAxiosError: true,
+        response: {
+          status: 404,
+          data: { error: 'Repository not found or inaccessible repository' },
+        },
+      };
+
+      vi.spyOn(axios, 'isAxiosError').mockReturnValue(true);
+
+      expect(() => handleApiError(error)).toThrow(
+        'This repository appears to be private or unavailable. Please use a public GitHub repository or upload a ZIP file instead.'
       );
     });
 
@@ -122,7 +138,7 @@ describe('API Error Handling', () => {
       const error = {
         isAxiosError: true,
         response: {
-          status: 404,
+          status: 418,
           data: {},
         },
       };

@@ -143,8 +143,8 @@ describe('RepoPilot Backend API Tests', () => {
     });
 
     it('should return 413 when ZIP file exceeds size limit', async () => {
-      // Create a buffer larger than 25MB
-      const largeBuffer = Buffer.alloc(26 * 1024 * 1024);
+      // Create a buffer larger than 100MB
+      const largeBuffer = Buffer.alloc(101 * 1024 * 1024);
 
       const response = await request(app)
         .post('/api/scan')

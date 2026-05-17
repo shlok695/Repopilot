@@ -9,6 +9,24 @@ import { ScanPayload } from '../types/scan';
 
 const LAST_SCAN_RESULT_KEY = 'repopilot:lastScanResult';
 
+const featureCards = [
+  {
+    eyebrow: 'Docs',
+    title: 'README Generator',
+    copy: 'Produces clean project documentation from detected languages, folders, scripts, and setup hints.',
+  },
+  {
+    eyebrow: 'Security',
+    title: 'Security Scanner',
+    copy: 'Runs dependency, secret, and static security checks and turns findings into fix guidance.',
+  },
+  {
+    eyebrow: 'Quality',
+    title: 'Bug & Quality Analyzer',
+    copy: 'Highlights risky patterns, missing tests, lint issues, and practical improvements for maintainers.',
+  },
+];
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +35,6 @@ const Home: React.FC = () => {
   const [rateLimitSeconds, setRateLimitSeconds] = useState<number | null>(null);
   const cancelRequestedRef = useRef(false);
 
-  // Rate limit countdown
   useEffect(() => {
     if (rateLimitSeconds === null || rateLimitSeconds <= 0) {
       return;
@@ -84,61 +101,61 @@ const Home: React.FC = () => {
       }
 
       navigate(`/results/${result.scanId}`, { state: { scanResult: result } });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (cancelRequestedRef.current) {
         return;
       }
 
-      const errorMessage = err.message || 'Scan failed. Please try again.';
-      
-      // Check if it's a rate limit error
+      const errorMessage = err instanceof Error ? err.message : 'Scan failed. Please try again.';
+
       if (errorMessage.includes('Rate limit reached')) {
         setRateLimitSeconds(60);
       }
-      
+
       setError(errorMessage);
       setIsLoading(false);
     }
   };
 
-  // Display error message with countdown if rate limited
-  const displayError = error && rateLimitSeconds !== null && rateLimitSeconds > 0
-    ? `Rate limit reached. Try again in ${rateLimitSeconds} seconds.`
-    : error;
+  const displayError =
+    error && rateLimitSeconds !== null && rateLimitSeconds > 0
+      ? `Rate limit reached. Try again in ${rateLimitSeconds} seconds.`
+      : error;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Navbar />
-      
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto">
-          {/* Hero Section */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              RepoPilot 🚀
-            </h1>
-            <p className="text-xl sm:text-2xl text-gray-700 dark:text-gray-200 mb-2 font-semibold">
-              Scan any repo. Get a README, security report, and bug analysis in seconds.
-            </p>
-            <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400">
-              Upload a GitHub repository or ZIP file for instant AI-powered analysis.
-            </p>
-          </div>
 
-          {/* Error Banner */}
+      <main className="container mx-auto px-4 py-12">
+        <div className="mx-auto max-w-6xl">
+          <section className="mb-10 text-center">
+            <div className="mb-5 inline-flex items-center rounded-full border border-cyan-600/30 bg-cyan-600/10 px-4 py-2 text-sm font-medium text-cyan-700 dark:border-cyan-400/30 dark:bg-cyan-400/10 dark:text-cyan-200">
+              Built with IBM Bob-assisted development
+            </div>
+            <h1 className="mx-auto mb-5 max-w-5xl text-4xl font-bold leading-tight text-slate-900 dark:text-white sm:text-6xl">
+              Turn any repository into documentation, security insights, and actionable fixes.
+            </h1>
+            <p className="mx-auto max-w-3xl text-base text-slate-600 dark:text-slate-300 sm:text-xl">
+              RepoPilot analyzes public GitHub repos or ZIP uploads, then generates README content,
+              vulnerability findings, code quality issues, dependency context, and a downloadable report.
+            </p>
+          </section>
+
           {displayError && (
             <div className="mb-6">
-              <ErrorBanner message={displayError} onDismiss={() => {
-                setError(null);
-                setRateLimitSeconds(null);
-              }} />
+              <ErrorBanner
+                message={displayError}
+                onDismiss={() => {
+                  setError(null);
+                  setRateLimitSeconds(null);
+                }}
+              />
             </div>
           )}
 
-          {/* Scan Form */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 sm:p-8 border border-gray-200 dark:border-gray-700">
+          <section className="rounded-lg border border-slate-700 bg-white p-6 shadow-2xl dark:bg-slate-900 sm:p-8">
             <ScanForm onSubmit={handleScanSubmit} isLoading={isLoading} />
-          </div>
+          </section>
 
           {isLoading && (
             <div className="mt-6">
@@ -146,33 +163,42 @@ const Home: React.FC = () => {
             </div>
           )}
 
-          {/* Features */}
-          <div className="mt-12">
+          <section className="mt-12">
             <h2 className="sr-only">Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
-                <div className="text-3xl mb-3" aria-hidden="true">📋</div>
-                <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Auto README</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                Generate comprehensive documentation automatically with AI-powered analysis
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {featureCards.map((feature) => (
+                <div
+                  key={feature.title}
+                  className="rounded-lg border border-slate-200 bg-white p-6 shadow-md dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-300">
+                    {feature.eyebrow}
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                    {feature.title}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{feature.copy}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-8 rounded-lg border border-slate-200 bg-white p-6 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-white">How to demo this</h2>
+            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-3">
+              <p>
+                <span className="font-semibold text-cyan-600 dark:text-cyan-300">Step 1:</span> Paste a public repo
+                URL or upload ZIP.
+              </p>
+              <p>
+                <span className="font-semibold text-cyan-600 dark:text-cyan-300">Step 2:</span> Start scan.
+              </p>
+              <p>
+                <span className="font-semibold text-cyan-600 dark:text-cyan-300">Step 3:</span> Review findings and
+                download report.
               </p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
-              <div className="text-3xl mb-3" aria-hidden="true">🛡️</div>
-              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Security Scan</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                Detect vulnerabilities using npm audit, semgrep, gitleaks, and more
-              </p>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow">
-              <div className="text-3xl mb-3" aria-hidden="true">🐛</div>
-              <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Bug Detection</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                Find code quality issues with eslint, ruff, and pattern analysis
-              </p>
-              </div>
-            </div>
-          </div>
+          </section>
         </div>
       </main>
     </div>
@@ -180,5 +206,3 @@ const Home: React.FC = () => {
 };
 
 export default Home;
-
-// Made with Bob

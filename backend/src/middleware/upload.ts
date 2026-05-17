@@ -3,7 +3,7 @@ import { join } from 'path';
 import { Request } from 'express';
 
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
-const MAX_SIZE_MB = parseInt(process.env.MAX_ZIP_SIZE_MB || '25', 10);
+const MAX_SIZE_MB = parseInt(process.env.MAX_ZIP_SIZE_MB || '100', 10);
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
 // Configure multer storage

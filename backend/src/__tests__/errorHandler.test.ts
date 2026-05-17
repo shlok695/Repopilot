@@ -91,7 +91,7 @@ describe('Error Handler Middleware Tests', () => {
       const response = await request(app).post('/test-file-too-large');
       
       expect(response.status).toBe(413);
-      expect(response.body.error).toBe('ZIP exceeds 25 MB limit');
+      expect(response.body.error).toBe('ZIP file is too large. Please upload a file smaller than 100 MB.');
     });
 
     it('should return 400 for other MulterErrors', async () => {

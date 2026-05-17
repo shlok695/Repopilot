@@ -91,7 +91,7 @@ const validateConfig = () => {
   console.log(`PORT: ${PORT}`);
   console.log(`ALLOWED_ORIGIN: ${ALLOWED_ORIGIN}`);
   console.log(`TMP_DIR: ${TMP_DIR}`);
-  console.log(`MAX_ZIP_SIZE_MB: ${process.env.MAX_ZIP_SIZE_MB || 25}`);
+  console.log(`MAX_ZIP_SIZE_MB: ${process.env.MAX_ZIP_SIZE_MB || 100}`);
   console.log(`SCAN_TIMEOUT_MS: ${process.env.SCAN_TIMEOUT_MS || 90000}`);
   console.log(`AGENT_TIMEOUT_MS: ${process.env.AGENT_TIMEOUT_MS || 30000}`);
   console.log('=====================================\n');

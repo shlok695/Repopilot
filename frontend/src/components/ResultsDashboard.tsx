@@ -125,7 +125,8 @@ const VulnTable: React.FC<VulnTableProps> = ({ vulnerabilities }) => {
   if (vulnerabilities.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">
-        <p className="text-sm">No vulnerabilities found</p>
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-300">No high-risk secrets detected</p>
+        <p className="mt-1 text-xs">Dependency and secret scanners did not report critical issues.</p>
       </div>
     );
   }
@@ -226,7 +227,8 @@ const BugTable: React.FC<BugTableProps> = ({ bugs }) => {
   if (bugs.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400">
-        <p className="text-sm">No bugs found</p>
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-300">No code quality blockers found</p>
+        <p className="mt-1 text-xs">RepoPilot did not detect high-signal bug patterns.</p>
       </div>
     );
   }
@@ -331,6 +333,60 @@ export default function ResultsDashboard({ scanResult }: ResultsDashboardProps) 
   const completedAt = getStringField(scanResult, 'completedAt');
   const readmeStrengths = getStringArrayField(readmeFeedback, 'strengths');
   const readmeImprovements = getStringArrayField(readmeFeedback, 'improvements');
+  const packageJson = asRecord(repoMetadata).packageJson;
+  const dependencyCount =
+    getStringArrayField(packageJson, 'topDependencies').length +
+    getStringArrayField(repoMetadata, 'pythonPackages').length;
+  const licenseFindings = vulnerabilities.filter((vuln) =>
+    `${vuln.tool} ${vuln.issue}`.toLowerCase().includes('license'),
+  ).length;
+  const highSecurityCount = vulnerabilities.filter((vuln) =>
+    ['CRITICAL', 'HIGH'].includes(vuln.severity.toUpperCase()),
+  ).length;
+
+  const summaryCards = [
+    {
+      label: 'Security Issues',
+      value: vulnerabilities.length,
+      note: highSecurityCount ? `${highSecurityCount} high risk` : 'No high-risk secrets detected',
+      accent: vulnerabilities.length ? 'text-red-600 dark:text-red-300' : 'text-green-600 dark:text-green-300',
+    },
+    {
+      label: 'Bugs / Code Quality',
+      value: bugs.length,
+      note: bugs.length ? 'Review quality findings' : 'No blockers found',
+      accent: bugs.length ? 'text-amber-600 dark:text-amber-300' : 'text-green-600 dark:text-green-300',
+    },
+    {
+      label: 'Dependencies',
+      value: dependencyCount || 'Scanned',
+      note: 'Dependency inventory',
+      accent: 'text-cyan-600 dark:text-cyan-300',
+    },
+    {
+      label: 'License Findings',
+      value: licenseFindings,
+      note: licenseFindings ? 'Review license notes' : 'No license conflicts found',
+      accent: licenseFindings ? 'text-amber-600 dark:text-amber-300' : 'text-green-600 dark:text-green-300',
+    },
+    {
+      label: 'Report Status',
+      value: finalReport ? 'Ready' : 'Pending',
+      note: status,
+      accent: finalReport ? 'text-green-600 dark:text-green-300' : 'text-slate-600 dark:text-slate-300',
+    },
+  ];
+
+  const agentCards = [
+    ['repoAnalyzerAgent', 'Maps languages, files, frameworks, package metadata, and project shape.'],
+    ['readmeGeneratorAgent', 'Creates README content from detected repo structure and tech stack.'],
+    ['vulnerabilityScannerAgent', 'Runs dependency and static security checks for known risks.'],
+    ['bugScannerAgent', 'Finds lint, quality, and risky code patterns.'],
+    ['secretsAgent', 'Looks for exposed credentials and secret-like patterns.'],
+    ['dependencyInventoryAgent', 'Summarizes dependency inventory and package signals.'],
+    ['licenseScannerAgent', 'Checks license metadata and flags possible conflicts.'],
+    ['reportGeneratorAgent', 'Combines all findings into the final downloadable report.'],
+  ];
 
   const handleCopyMarkdown = async () => {
     try {
@@ -355,6 +411,16 @@ export default function ResultsDashboard({ scanResult }: ResultsDashboardProps) 
 
   const overviewPanel = (
     <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 print-friendly">
+        {summaryCards.map((card) => (
+          <div key={card.label} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">{card.label}</p>
+            <p className={`mt-2 text-2xl font-bold ${card.accent}`}>{card.value}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{card.note}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print-friendly">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
@@ -411,6 +477,18 @@ export default function ResultsDashboard({ scanResult }: ResultsDashboardProps) 
       {warnings.length > 0 && (
         <WarningBox warnings={warnings} />
       )}
+
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 print-friendly">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">RepoPilot Agent Pipeline</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {agentCards.map(([name, description]) => (
+            <div key={name} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4">
+              <h3 className="font-mono text-sm font-semibold text-slate-950 dark:text-white">{name}</h3>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 print-friendly">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{repoName}</h1>

@@ -2,36 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@layer base {
+  :root {
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  body {
+    margin: 0;
+    display: flex;
+    place-items: center;
+    min-width: 320px;
+    min-height: 100vh;
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Monospace font for code elements */
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  }
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
+/* Print-friendly styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
-}
+  body {
+    background: white !important;
+    color: black !important;
+  }
 
-* {
-  box-sizing: border-box;
+  .print-friendly {
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Ensure content is readable */
+  * {
+    color: black !important;
+    background: white !important;
+  }
+
+  /* Keep some backgrounds for readability */
+  .bg-red-50, .bg-red-100,
+  .bg-orange-50, .bg-orange-100,
+  .bg-yellow-50, .bg-yellow-100,
+  .bg-green-50, .bg-green-100,
+  .bg-blue-50, .bg-blue-100,
+  .bg-gray-50, .bg-gray-100 {
+    background: #f9fafb !important;
+  }
+
+  /* Preserve severity badge colors */
+  .severity {
+    border: 1px solid #000 !important;
+  }
+
+  /* Remove shadows and unnecessary spacing */
+  .shadow-sm, .shadow, .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  /* Optimize page breaks */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  table, figure {
+    page-break-inside: avoid;
+  }
 }
 
 /* Made with Bob */

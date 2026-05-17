@@ -1,9 +1,10 @@
 import axios from 'axios';
 import { ScanResult, ScanPayload } from '../types/scan';
-import { mockScanResult } from './mockData';
+import { mockReactResult, mockFlaskResult } from './mockData';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 const USE_MOCK = import.meta.env.VITE_MOCK_API === 'true';
+const MOCK_ERROR = import.meta.env.VITE_MOCK_ERROR === 'true';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -16,14 +17,38 @@ const apiClient = axios.create({
 // Simulate delay for mock API
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Determine which mock result to return based on payload
+const selectMockResult = (payload: ScanPayload): ScanResult => {
+  if (payload.type === 'github' && payload.repoUrl) {
+    const url = payload.repoUrl.toLowerCase();
+    // Return Flask/Python mock if URL contains python, flask, or api keywords
+    if (url.includes('python') || url.includes('flask') || url.includes('api')) {
+      return {
+        ...mockFlaskResult,
+        scanId: `mock_scan_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+  
+  // Default to React mock result
+  return {
+    ...mockReactResult,
+    scanId: `mock_scan_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+  };
+};
+
 export const startScan = async (payload: ScanPayload): Promise<ScanResult> => {
   if (USE_MOCK) {
     await delay(1500);
-    return {
-      ...mockScanResult,
-      scanId: `scan_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: new Date().toISOString(),
-    };
+    
+    // Simulate error if MOCK_ERROR is enabled
+    if (MOCK_ERROR) {
+      throw new Error('Mock backend error: scan failed. This is a simulated error for testing purposes.');
+    }
+    
+    return selectMockResult(payload);
   }
 
   if (payload.type === 'github') {
@@ -51,7 +76,14 @@ export const startScan = async (payload: ScanPayload): Promise<ScanResult> => {
 export const getScanResult = async (scanId: string): Promise<ScanResult> => {
   if (USE_MOCK) {
     await delay(500);
-    return mockScanResult;
+    
+    // Return mock result with the requested scanId
+    const mockResult = scanId.includes('flask') ? mockFlaskResult : mockReactResult;
+    return {
+      ...mockResult,
+      scanId,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   const response = await apiClient.get<ScanResult>(`/api/scan/${scanId}`);
@@ -61,8 +93,13 @@ export const getScanResult = async (scanId: string): Promise<ScanResult> => {
 export const downloadReport = async (scanId: string): Promise<Blob> => {
   if (USE_MOCK) {
     await delay(500);
-    const mockReport = `# RepoPilot Scan Report\n\nScan ID: ${scanId}\n\nThis is a mock report.`;
-    return new Blob([mockReport], { type: 'text/markdown' });
+    
+    // Determine which mock report to use
+    const mockResult = scanId.includes('flask') ? mockFlaskResult : mockReactResult;
+    const reportContent = mockResult.fullReport || mockResult.reportMarkdown || 
+      `# RepoPilot Scan Report\n\nScan ID: ${scanId}\n\nThis is a mock report.`;
+    
+    return new Blob([reportContent], { type: 'text/markdown' });
   }
 
   const response = await apiClient.get(`/api/scan/${scanId}/report`, {
@@ -80,5 +117,8 @@ export const getRecentScans = async () => {
   const response = await apiClient.get('/api/scans');
   return response.data;
 };
+
+// Export types for convenience
+export type { ScanResult, ScanPayload, Vulnerability, Bug, SuggestedFix } from '../types/scan';
 
 // Made with Bob

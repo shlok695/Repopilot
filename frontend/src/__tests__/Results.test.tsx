@@ -19,7 +19,7 @@ describe('Results page', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: /example-repo/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: mockScanResult.repoMetadata.name })).toBeInTheDocument();
     expect(screen.getByText('Total Vulns')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /README/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Vulnerabilities/i })).toBeInTheDocument();

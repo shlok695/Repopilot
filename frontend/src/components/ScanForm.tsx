@@ -12,6 +12,7 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
   const [file, setFile] = useState<File | null>(null);
   const [urlError, setUrlError] = useState('');
   const [fileError, setFileError] = useState('');
+  const isMockMode = import.meta.env.VITE_MOCK_API === 'true';
 
   const validateGitHubUrl = (url: string): boolean => {
     if (!url.startsWith('https://github.com/')) {
@@ -103,7 +104,11 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
             id="repoUrl"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
-            placeholder="https://github.com/username/repository"
+            placeholder={
+              isMockMode
+                ? 'https://github.com/example/react-dashboard-demo'
+                : 'https://github.com/username/repository'
+            }
             className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
               urlError ? 'border-red-500' : 'border-gray-300'
             }`}
@@ -112,9 +117,15 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
           {urlError && (
             <p className="mt-2 text-sm text-red-600">{urlError}</p>
           )}
-          <p className="mt-2 text-sm text-gray-500">
-            Example: https://github.com/facebook/react
-          </p>
+          {isMockMode ? (
+            <p className="mt-2 text-sm text-blue-600">
+              💡 Mock mode is active. Try a React repo URL or use a Flask/Python keyword to see Python mock data.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-gray-500">
+              Example: https://github.com/facebook/react
+            </p>
+          )}
         </div>
       )}
 

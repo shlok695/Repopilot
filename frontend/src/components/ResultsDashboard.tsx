@@ -1,273 +1,592 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { ScanResult } from '../types/scan';
-import VulnTable from './VulnTable';
-import BugTable from './BugTable';
-import DownloadButton from './DownloadButton';
+import { ScanResult, Vulnerability, Bug } from '../types/scan';
 
 interface ResultsDashboardProps {
-  scanResult: ScanResult;
+  scanResult?: ScanResult | null;
 }
 
-const ResultsDashboard: React.FC<ResultsDashboardProps> = ({ scanResult }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'readme' | 'vulnerabilities' | 'bugs' | 'fixes' | 'report'>('overview');
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'readme', label: 'README', icon: '📝' },
-    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: '🔒', count: scanResult.vulnerabilities.length },
-    { id: 'bugs', label: 'Bugs', icon: '🐛', count: scanResult.bugs.length },
-    { id: 'fixes', label: 'Suggested Fixes', icon: '💡', count: scanResult.suggestedFixes.length },
-    { id: 'report', label: 'Full Report', icon: '📄' },
-  ];
+function getSeverityBadgeClass(severity: string): string {
+  const upperSeverity = severity.toUpperCase();
+  
+  switch (upperSeverity) {
+    case 'HIGH':
+    case 'CRITICAL':
+      return 'bg-red-100 text-red-800 border-red-300';
+    case 'MEDIUM':
+      return 'bg-orange-100 text-orange-800 border-orange-300';
+    case 'LOW':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+    case 'INFO':
+      return 'bg-blue-100 text-blue-800 border-blue-300';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-300';
+  }
+}
+
+function getSeverityOrder(severity: string): number {
+  const upperSeverity = severity.toUpperCase();
+  
+  switch (upperSeverity) {
+    case 'HIGH':
+    case 'CRITICAL':
+      return 0;
+    case 'MEDIUM':
+      return 1;
+    case 'LOW':
+      return 2;
+    case 'INFO':
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function sortBySeverity<T extends { severity: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => getSeverityOrder(a.severity) - getSeverityOrder(b.severity));
+}
+
+type DisplayRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): DisplayRecord {
+  return value && typeof value === 'object' ? value as DisplayRecord : {};
+}
+
+function getStringField(value: unknown, field: string): string | undefined {
+  const fieldValue = asRecord(value)[field];
+  return typeof fieldValue === 'string' && fieldValue.trim() ? fieldValue : undefined;
+}
+
+function getNumberField(value: unknown, field: string): number | undefined {
+  const fieldValue = asRecord(value)[field];
+  return typeof fieldValue === 'number' ? fieldValue : undefined;
+}
+
+function getStringArrayField(value: unknown, field: string): string[] {
+  const fieldValue = asRecord(value)[field];
+  return Array.isArray(fieldValue)
+    ? fieldValue.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    : [];
+}
+
+function getIssueTitle(item: Vulnerability | Bug): string {
+  return getStringField(item, 'title') ?? item.issue ?? 'Untitled issue';
+}
+
+function getRecommendation(item: Vulnerability | Bug): string {
+  return (
+    item.recommendation ||
+    getStringField(item, 'fix') ||
+    getStringField(item, 'suggestion') ||
+    'No recommendation provided.'
+  );
+}
+
+function getReadmeContent(scanResult?: ScanResult | null): string {
+  if (!scanResult?.readme) {
+    return '';
+  }
+
+  if (typeof scanResult.readme === 'string') {
+    return scanResult.readme;
+  }
+
+  return scanResult.readme.content ?? '';
+}
+
+// ============================================================================
+// VULN TABLE COMPONENT
+// ============================================================================
+
+interface VulnTableProps {
+  vulnerabilities: Vulnerability[];
+}
+
+const VulnTable: React.FC<VulnTableProps> = ({ vulnerabilities }) => {
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  const toggleRow = (index: number) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  if (vulnerabilities.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-400">
+        <p className="text-sm">No vulnerabilities found</p>
+      </div>
+    );
+  }
+
+  const sortedVulns = sortBySeverity(vulnerabilities);
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {scanResult.repoMetadata.name}
-            </h1>
-            <p className="text-gray-600">
-              Scan ID: <span className="font-mono text-sm">{scanResult.scanId}</span>
-            </p>
-          </div>
-          <DownloadButton scanId={scanResult.scanId} />
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Vulnerabilities</p>
-              <p className="text-3xl font-bold text-red-600">{scanResult.vulnerabilities.length}</p>
-            </div>
-            <span className="text-4xl">🔒</span>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Bugs</p>
-              <p className="text-3xl font-bold text-orange-600">{scanResult.bugs.length}</p>
-            </div>
-            <span className="text-4xl">🐛</span>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Suggested Fixes</p>
-              <p className="text-3xl font-bold text-blue-600">{scanResult.suggestedFixes.length}</p>
-            </div>
-            <span className="text-4xl">💡</span>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Warnings</p>
-              <p className="text-3xl font-bold text-yellow-600">{scanResult.warnings.length}</p>
-            </div>
-            <span className="text-4xl">⚠️</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Warnings */}
-      {scanResult.warnings.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <h3 className="font-semibold text-yellow-800 mb-2">⚠️ Warnings</h3>
-          <ul className="list-disc list-inside space-y-1">
-            {scanResult.warnings.map((warning, index) => (
-              <li key={index} className="text-sm text-yellow-700">{warning}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center space-x-2 px-6 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Severity
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Title
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Package
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Tool
+            </th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {sortedVulns.map((vuln, index) => (
+            <React.Fragment key={index}>
+              <tr 
+                className="hover:bg-gray-50 cursor-pointer"
+                onClick={() => toggleRow(index)}
               >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    activeTab === tab.id ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {tab.count}
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded border ${getSeverityBadgeClass(vuln.severity)}`}>
+                    {vuln.severity.toUpperCase()}
                   </span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div className="p-6">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Repository Overview</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">Languages</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {scanResult.repoMetadata.languages.map((lang, index) => (
-                        <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                          {lang}
-                        </span>
-                      ))}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-900">
+                  {getIssueTitle(vuln)}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                  {getStringField(vuln, 'packageName') || vuln.file || '-'}
+                  {getStringField(vuln, 'version') && <span className="text-gray-400"> @{getStringField(vuln, 'version')}</span>}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {vuln.tool || '-'}
+                </td>
+              </tr>
+              {expandedRows.has(index) && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-3 bg-blue-50">
+                    <div className="text-sm text-gray-700">
+                      <strong className="text-blue-900">Recommendation:</strong>
+                      <p className="mt-1">{getRecommendation(vuln)}</p>
                     </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">Frameworks</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {scanResult.repoMetadata.frameworks.map((framework, index) => (
-                        <span key={index} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
-                          {framework}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">Repository Stats</h3>
-                    <ul className="space-y-2 text-sm text-gray-700">
-                      <li>📁 Files: {scanResult.repoMetadata.fileCount}</li>
-                      <li>📝 Lines of Code: {scanResult.repoMetadata.totalLines.toLocaleString()}</li>
-                      <li>🐳 Docker: {scanResult.repoMetadata.hasDocker ? '✅ Yes' : '❌ No'}</li>
-                      <li>🧪 Tests: {scanResult.repoMetadata.hasTests ? '✅ Yes' : '❌ No'}</li>
-                    </ul>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">Scan Summary</h3>
-                    <ul className="space-y-2 text-sm text-gray-700">
-                      <li>🔒 Vulnerabilities: {scanResult.vulnerabilities.length}</li>
-                      <li>🐛 Bugs: {scanResult.bugs.length}</li>
-                      <li>💡 Suggested Fixes: {scanResult.suggestedFixes.length}</li>
-                      <li>⚠️ Warnings: {scanResult.warnings.length}</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* README Tab */}
-          {activeTab === 'readme' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Auto-Generated README</h2>
-              <div className="prose max-w-none bg-gray-50 rounded-lg p-6">
-                <ReactMarkdown>{scanResult.readme.content}</ReactMarkdown>
-              </div>
-            </div>
-          )}
-
-          {/* Vulnerabilities Tab */}
-          {activeTab === 'vulnerabilities' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Security Vulnerabilities</h2>
-              <VulnTable vulnerabilities={scanResult.vulnerabilities} />
-            </div>
-          )}
-
-          {/* Bugs Tab */}
-          {activeTab === 'bugs' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Code Quality Issues</h2>
-              <BugTable bugs={scanResult.bugs} />
-            </div>
-          )}
-
-          {/* Suggested Fixes Tab */}
-          {activeTab === 'fixes' && (
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Suggested Fixes</h2>
-              {scanResult.suggestedFixes.length === 0 ? (
-                <div className="text-center py-12">
-                  <span className="text-6xl mb-4 block">✅</span>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Fixes Needed</h3>
-                  <p className="text-gray-600">Your repository is in great shape!</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {scanResult.suggestedFixes.map((fix, index) => (
-                    <div key={index} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-start">
-                        <span className="text-2xl mr-3">💡</span>
-                        <p className="text-gray-800">{fix}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                  </td>
+                </tr>
               )}
-            </div>
-          )}
-
-          {/* Full Report Tab */}
-          {activeTab === 'report' && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Full Report</h2>
-                <DownloadButton scanId={scanResult.scanId} />
-              </div>
-              <div className="bg-gray-50 rounded-lg p-6">
-                <p className="text-gray-600 mb-4">
-                  The full report includes all findings, recommendations, and detailed analysis.
-                  Click the download button above to get the complete Markdown report.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h3 className="font-semibold text-gray-900 mb-2">Report Includes:</h3>
-                    <ul className="space-y-1 text-sm text-gray-700">
-                      <li>✓ Executive Summary</li>
-                      <li>✓ Repository Metadata</li>
-                      <li>✓ Auto-Generated README</li>
-                      <li>✓ Vulnerability Details</li>
-                      <li>✓ Bug Analysis</li>
-                      <li>✓ Suggested Fixes</li>
-                      <li>✓ Dependency Inventory</li>
-                      <li>✓ License Information</li>
-                      <li>✓ Code Complexity Analysis</li>
-                      <li>✓ Test Coverage Report</li>
-                    </ul>
-                  </div>
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h3 className="font-semibold text-gray-900 mb-2">Report Format:</h3>
-                    <ul className="space-y-1 text-sm text-gray-700">
-                      <li>📄 Format: Markdown (.md)</li>
-                      <li>📊 Tables and Charts</li>
-                      <li>🎨 Formatted for GitHub</li>
-                      <li>📋 Easy to Share</li>
-                      <li>🔍 Searchable Content</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
 
-export default ResultsDashboard;
+// ============================================================================
+// BUG TABLE COMPONENT
+// ============================================================================
+
+interface BugTableProps {
+  bugs: Bug[];
+}
+
+const BugTable: React.FC<BugTableProps> = ({ bugs }) => {
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  const toggleRow = (index: number) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  if (bugs.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-400">
+        <p className="text-sm">No bugs found</p>
+      </div>
+    );
+  }
+
+  const sortedBugs = sortBySeverity(bugs);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Severity
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Title
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              File
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Tool
+            </th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {sortedBugs.map((bug, index) => (
+            <React.Fragment key={index}>
+              <tr 
+                className="hover:bg-gray-50 cursor-pointer"
+                onClick={() => toggleRow(index)}
+              >
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded border ${getSeverityBadgeClass(bug.severity)}`}>
+                    {bug.severity.toUpperCase()}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-900">
+                  {getIssueTitle(bug)}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600 font-mono">
+                  {bug.file || '-'}
+                  {getNumberField(bug, 'line') && <span className="text-gray-400">:{getNumberField(bug, 'line')}</span>}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {bug.tool || '-'}
+                </td>
+              </tr>
+              {expandedRows.has(index) && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-3 bg-blue-50">
+                    <div className="text-sm text-gray-700">
+                      <strong className="text-blue-900">Recommendation:</strong>
+                      <p className="mt-1">{getRecommendation(bug)}</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// ============================================================================
+// MAIN DASHBOARD COMPONENT
+// ============================================================================
+
+export default function ResultsDashboard({ scanResult }: ResultsDashboardProps) {
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [reportExpanded, setReportExpanded] = useState(false);
+
+  const readmeFeedback = scanResult?.readmeFeedback;
+  const vulnerabilities = scanResult?.vulnerabilities ?? [];
+  const bugs = scanResult?.bugs ?? [];
+  const suggestedFixes = scanResult?.suggestedFixes ?? [];
+  const warnings = scanResult?.warnings ?? [];
+  const repoMetadata = scanResult?.repoMetadata;
+  const repoName = repoMetadata?.name ?? 'Unknown repository';
+  const techStack = [...(repoMetadata?.languages ?? []), ...(repoMetadata?.frameworks ?? [])];
+  const totalFiles = repoMetadata?.fileCount ?? 0;
+  const totalLines = repoMetadata?.totalLines;
+  const packageManager = getStringField(repoMetadata, 'packageManager') ?? 'Unknown';
+  const readme = getReadmeContent(scanResult);
+  const finalReport = scanResult?.reportMarkdown ?? scanResult?.fullReport ?? '';
+  const status = scanResult?.status ?? 'Unknown';
+  const timestamp = scanResult?.timestamp ?? getStringField(scanResult, 'createdAt');
+  const completedAt = getStringField(scanResult, 'completedAt');
+  const readmeStrengths = getStringArrayField(readmeFeedback, 'strengths');
+  const readmeImprovements = getStringArrayField(readmeFeedback, 'improvements');
+
+  const handleCopyMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(readme);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* A. Summary Stats Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Vulns</p>
+              <p className="text-2xl font-bold text-gray-900">{vulnerabilities.length}</p>
+            </div>
+            <div className={`text-3xl ${vulnerabilities.length > 0 ? 'text-red-500' : 'text-gray-300'}`}>
+              🔒
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Bugs</p>
+              <p className="text-2xl font-bold text-gray-900">{bugs.length}</p>
+            </div>
+            <div className={`text-3xl ${bugs.length > 0 ? 'text-orange-500' : 'text-gray-300'}`}>
+              🐛
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Fixes Suggested</p>
+              <p className="text-2xl font-bold text-gray-900">{suggestedFixes.length}</p>
+            </div>
+            <div className="text-3xl text-blue-500">💡</div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Warnings</p>
+              <p className="text-2xl font-bold text-gray-900">{warnings.length}</p>
+            </div>
+            <div className="text-3xl text-yellow-500">⚠️</div>
+          </div>
+        </div>
+      </div>
+
+      {/* B. Header Card */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">
+          {repoName}
+        </h1>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          {techStack.length > 0 && (
+            <div>
+              <p className="text-gray-600 mb-2">Tech Stack</p>
+              <div className="flex flex-wrap gap-2">
+                {techStack.map((tech, idx) => (
+                  <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                    {tech}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="text-gray-600 mb-2">Total Files</p>
+            <p className="text-lg font-semibold text-gray-900">{totalFiles}</p>
+          </div>
+          {typeof totalLines === 'number' && (
+            <div>
+              <p className="text-gray-600 mb-2">Total Lines</p>
+              <p className="text-lg font-semibold text-gray-900">{totalLines.toLocaleString()}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-gray-600 mb-2">Package Manager</p>
+            <p className="text-lg font-semibold text-gray-900">{packageManager}</p>
+          </div>
+          <div>
+            <p className="text-gray-600 mb-2">Status</p>
+            <p className="text-lg font-semibold text-gray-900 capitalize">{status}</p>
+          </div>
+          {timestamp && (
+            <div>
+              <p className="text-gray-600 mb-2">Timestamp</p>
+              <p className="text-sm font-medium text-gray-900">{timestamp}</p>
+            </div>
+          )}
+          {completedAt && (
+            <div>
+              <p className="text-gray-600 mb-2">Completed At</p>
+              <p className="text-sm font-medium text-gray-900">{completedAt}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {scanResult?.error && (
+        <div className="bg-red-50 rounded-2xl shadow-sm border border-red-200 p-6">
+          <h2 className="text-2xl font-bold text-red-900 mb-2">Error</h2>
+          <p className="text-sm text-red-800">{scanResult.error}</p>
+        </div>
+      )}
+
+      {/* C. README Section */}
+      {readme && (
+        <div className="bg-white rounded-2xl shadow-sm border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">README</h2>
+            <button
+              onClick={handleCopyMarkdown}
+              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              {copySuccess ? '✓ Copied!' : 'Copy Markdown'}
+            </button>
+          </div>
+          <div className="max-w-none space-y-4 text-sm text-gray-800 [&_a]:text-blue-700 [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:text-gray-950 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-950 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-gray-900 [&_li]:ml-5 [&_li]:list-disc [&_pre]:rounded-lg [&_pre]:bg-gray-50 [&_pre]:p-3 [&_pre]:text-gray-800">
+            <ReactMarkdown>{readme}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {readmeFeedback && (
+        <div className="bg-white rounded-2xl shadow-sm border p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Documentation Feedback</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            {typeof readmeFeedback.score === 'number' && (
+              <div>
+                <p className="text-gray-600 mb-2">Score</p>
+                <p className="text-lg font-semibold text-gray-900">{readmeFeedback.score}</p>
+              </div>
+            )}
+            {readmeStrengths.length > 0 && (
+              <div>
+                <p className="text-gray-600 mb-2">Strengths</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                  {readmeStrengths.map((strength, idx) => (
+                    <li key={idx}>{strength}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {readmeImprovements.length > 0 && (
+              <div>
+                <p className="text-gray-600 mb-2">Improvements</p>
+                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                  {readmeImprovements.map((improvement, idx) => (
+                    <li key={idx}>{improvement}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* D. Vulnerability Section */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-2xl font-bold text-gray-900">Vulnerabilities</h2>
+          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+            vulnerabilities.length > 0 
+              ? 'bg-red-100 text-red-800' 
+              : 'bg-gray-100 text-gray-600'
+          }`}>
+            {vulnerabilities.length}
+          </span>
+        </div>
+        <VulnTable vulnerabilities={vulnerabilities} />
+      </div>
+
+      {/* E. Bug Section */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-2xl font-bold text-gray-900">Bugs</h2>
+          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+            bugs.length > 0 
+              ? 'bg-orange-100 text-orange-800' 
+              : 'bg-gray-100 text-gray-600'
+          }`}>
+            {bugs.length}
+          </span>
+        </div>
+        <BugTable bugs={bugs} />
+      </div>
+
+      {/* F. Suggested Fixes */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Suggested Fixes</h2>
+        {suggestedFixes.length === 0 ? (
+          <p className="text-gray-400 text-sm">No fixes suggested</p>
+        ) : (
+          <ol className="list-decimal space-y-4 pl-5">
+            {suggestedFixes.map((fix, idx) => (
+              <li key={idx} className="text-sm text-gray-700 pl-2">
+                <div className="font-mono text-xs bg-slate-50 rounded border border-slate-200 p-3 text-slate-800">
+                  <p className="font-semibold text-slate-950">{fix.title}</p>
+                  <p className="mt-1 whitespace-pre-wrap">{fix.description}</p>
+                  {fix.file && (
+                    <p className="mt-2 text-blue-700">File: {fix.file}</p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      {/* G. Warnings */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Warnings</h2>
+        {warnings.length === 0 ? (
+          <p className="text-gray-400 text-sm">No warnings</p>
+        ) : (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <ul className="list-disc list-inside space-y-2">
+              {warnings.map((warning, idx) => (
+                <li key={idx} className="text-sm text-yellow-800">{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* H. Final Report */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Final Report</h2>
+        {finalReport ? (
+          <details 
+            className="cursor-pointer"
+            open={reportExpanded}
+            onToggle={(e) => setReportExpanded((e.target as HTMLDetailsElement).open)}
+          >
+            <summary className="text-blue-600 hover:text-blue-800 font-medium text-sm mb-2">
+              {reportExpanded ? '▼' : '▶'} Click to {reportExpanded ? 'collapse' : 'expand'} raw Markdown
+            </summary>
+            <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto text-xs font-mono text-gray-800 whitespace-pre-wrap">
+              {finalReport}
+            </pre>
+          </details>
+        ) : (
+          <p className="text-gray-400 text-sm">No final report available</p>
+        )}
+      </div>
+
+      {/* I. Download Button */}
+      <div className="bg-white rounded-2xl shadow-sm border p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Download Report</h2>
+        {scanResult?.scanId ? (
+          <a
+            href={`/api/scan/${scanResult.scanId}/report`}
+            download
+            className="inline-block px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+          >
+            📥 Download Full Report
+          </a>
+        ) : (
+          <button
+            disabled
+            className="inline-block px-6 py-3 bg-gray-300 text-gray-500 font-medium rounded-lg cursor-not-allowed"
+          >
+            📥 Download Not Available
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Made with Bob

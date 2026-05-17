@@ -1,3 +1,5 @@
+import { AnySeverity } from '../utils/severity';
+
 export interface RepoMetadata {
   name: string;
   languages: string[];
@@ -6,10 +8,11 @@ export interface RepoMetadata {
   hasTests: boolean;
   fileCount: number;
   totalLines: number;
+  packageManager?: string;
 }
 
 export interface Vulnerability {
-  severity: 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  severity: AnySeverity;
   tool: string;
   file: string;
   issue: string;
@@ -17,11 +20,17 @@ export interface Vulnerability {
 }
 
 export interface Bug {
-  severity: 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  severity: AnySeverity;
   tool: string;
   file: string;
   issue: string;
   recommendation: string;
+}
+
+export interface ReadmeFeedback {
+  score: number;
+  strengths: string[];
+  improvements: string[];
 }
 
 export interface Readme {
@@ -29,16 +38,32 @@ export interface Readme {
   content: string;
 }
 
+export interface SuggestedFix {
+  title: string;
+  description: string;
+  file?: string;
+  id?: string;
+  type?: 'vulnerability' | 'bug' | 'improvement';
+  priority?: 'high' | 'medium' | 'low';
+  effort?: 'low' | 'medium' | 'high';
+  relatedIssues?: string[];
+}
+
 export interface ScanResult {
   scanId: string;
-  status: 'pending' | 'scanning' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'scanning' | 'completed' | 'failed';
   repoMetadata: RepoMetadata;
   readme: Readme;
+  readmeFeedback?: ReadmeFeedback;
   vulnerabilities: Vulnerability[];
   bugs: Bug[];
-  suggestedFixes: string[];
+  suggestedFixes: SuggestedFix[];
   warnings: string[];
+  fullReport?: string;
+  reportMarkdown?: string;
   timestamp: string;
+  createdAt?: string;
+  completedAt?: string;
   error?: string;
 }
 

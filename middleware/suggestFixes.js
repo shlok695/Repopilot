@@ -1,165 +1,185 @@
-/**
- * Middleware: Suggested Fixes Generator
- * Automatically produces actionable fix suggestions from vulnerability and bug findings.
- */
+const severityPriority = {
+  CRITICAL: 'high',
+  HIGH: 'high',
+  MEDIUM: 'medium',
+  LOW: 'low',
+  INFO: 'low',
+};
 
-/**
- * Extracts the variable name from an eslint no-unused-vars message.
- * Eslint message format usually: "'varName' is defined but never used."
- */
-function extractUnusedVarName(issueStr) {
-  const match = issueStr.match(/'([^']+)'/);
-  return match ? match[1] : 'variable';
+const effortForSeverity = {
+  CRITICAL: 'medium',
+  HIGH: 'medium',
+  MEDIUM: 'medium',
+  LOW: 'low',
+  INFO: 'low',
+};
+
+function extractPackageName(issue = '') {
+  const parts = issue.split(':');
+  return parts[0]?.trim() || 'package';
 }
 
-/**
- * Extracts the package name from an npm audit issue.
- */
-function extractPackageName(issueStr) {
-  const parts = issueStr.split(':');
-  return parts[0].trim() || 'package';
-}
+export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
+  const fixes = new Map();
 
-/**
- * Generate suggested fixes based on scan findings.
- * 
- * @param {Array} vulnerabilities 
- * @param {Array} bugs 
- * @returns {Array<string>} List of deduplicated, formatted markdown strings
- */
-export function generateSuggestedFixes(vulnerabilities = [], bugs = []) {
-  const rawFixes = [];
-
-  // 1. Process Vulnerabilities
-  vulnerabilities.forEach(v => {
-    const issueLower = (v.issue || '').toLowerCase();
-    
-    // npm audit High/Critical
-    if (v.tool === 'npm audit' && (v.severity === 'HIGH' || v.severity === 'CRITICAL')) {
-      const pkgName = extractPackageName(v.issue);
-      rawFixes.push({
-        category: 'Dependencies',
-        severity: v.severity,
-        text: `Run \`npm audit fix --force\` to patch vulnerable package \`${pkgName}\`.`,
-        effort: 'Quick (< 5 min)',
-        docs: 'https://docs.npmjs.com/cli/v8/commands/npm-audit'
-      });
-    } 
-    // pip-audit
-    else if (v.tool === 'pip-audit' && (v.severity === 'HIGH' || v.severity === 'CRITICAL')) {
-      rawFixes.push({
-        category: 'Dependencies',
-        severity: v.severity,
-        text: `Update vulnerable Python packages in \`${v.file}\`.`,
-        effort: 'Medium (30 min)',
-        docs: 'https://pypi.org/project/pip-audit/'
+  const addFix = (title, description, extra = {}) => {
+    if (!fixes.has(title)) {
+      fixes.set(title, {
+        title,
+        description,
+        type: extra.type || 'improvement',
+        priority: extra.priority || severityPriority[extra.severity] || 'medium',
+        effort: extra.effort || effortForSeverity[extra.severity] || 'medium',
+        relatedIssues: extra.relatedIssues || [],
+        ...(extra.file ? { file: extra.file } : {}),
+        ...(extra.docs ? { docs: extra.docs } : {}),
       });
     }
-    // Secret scanning (semgrep or gitleaks)
-    else if (v.tool === 'gitleaks' || issueLower.includes('secret') || issueLower.includes('hardcoded')) {
-      rawFixes.push({
-        category: 'Secrets',
-        severity: v.severity,
-        text: `Move hardcoded secret to \`.env\` and add it to \`.gitignore\` (Found in \`${v.file}\`).`,
-        effort: 'Medium (30 min)',
-        docs: 'https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning'
-      });
+  };
+
+  vulnerabilities.forEach(vuln => {
+    const issue = vuln.issue || vuln.title || '';
+    const issueLower = issue.toLowerCase();
+    const severity = vuln.severity || 'MEDIUM';
+
+    if (vuln.tool === 'npm audit' || issueLower.includes('dependency') || issueLower.includes('package')) {
+      const packageName = extractPackageName(issue);
+      addFix(
+        'Update vulnerable dependencies',
+        `Update vulnerable dependency \`${packageName}\` to a secure version. Run npm audit fix, pip-audit, or the relevant package manager update command and rerun the scan.`,
+        {
+          file: vuln.file,
+          type: 'vulnerability',
+          severity,
+          relatedIssues: [issue],
+          docs: 'https://docs.npmjs.com/cli/commands/npm-audit',
+        }
+      );
     }
-    else {
-      // General vulnerabilities fallback
-      rawFixes.push({
-        category: 'Security',
-        severity: v.severity,
-        text: `Review and fix security issue in \`${v.file}\`. Recommendation: ${v.recommendation || 'See findings'}`,
-        effort: 'Medium (30 min)',
-        docs: null
-      });
+
+    if (vuln.tool === 'gitleaks' || issueLower.includes('secret') || issueLower.includes('hardcoded') || issueLower.includes('credential') || issueLower.includes('key')) {
+      addFix(
+        'Move secrets out of source code',
+        'Move hardcoded secrets to environment variables or a secrets manager, add local secret files to .gitignore, and rotate any exposed credentials.',
+        {
+          file: vuln.file,
+          type: 'vulnerability',
+          severity,
+          relatedIssues: [issue],
+          docs: 'https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning',
+        }
+      );
+    }
+
+    if (issueLower.includes('injection') || issueLower.includes('sql')) {
+      addFix(
+        'Harden database inputs',
+        'Replace interpolated SQL or command strings with parameterized queries, prepared statements, and input validation.',
+        {
+          file: vuln.file,
+          type: 'vulnerability',
+          severity,
+          effort: 'high',
+          relatedIssues: [issue],
+        }
+      );
+    }
+
+    if (issueLower.includes('xss') || issueLower.includes('cross-site') || issueLower.includes('html assignment')) {
+      addFix(
+        'Reduce XSS risk',
+        'Use safe DOM APIs, sanitize trusted HTML before rendering, and consider adding Content Security Policy headers.',
+        {
+          file: vuln.file,
+          type: 'vulnerability',
+          severity,
+          relatedIssues: [issue],
+        }
+      );
+    }
+
+    if (!issueLower.includes('dependency') && !issueLower.includes('package') && !issueLower.includes('secret') && !issueLower.includes('hardcoded') && !issueLower.includes('credential') && !issueLower.includes('key') && !issueLower.includes('injection') && !issueLower.includes('sql') && !issueLower.includes('xss') && !issueLower.includes('cross-site')) {
+      addFix(
+        'Review security finding',
+        `Review and fix the security issue${vuln.file ? ` in \`${vuln.file}\`` : ''}. ${vuln.recommendation || 'Follow the scanner recommendation and rerun the scan.'}`,
+        {
+          file: vuln.file,
+          type: 'vulnerability',
+          severity,
+          relatedIssues: [issue],
+        }
+      );
     }
   });
 
-  // 2. Process Bugs & Code Quality
-  bugs.forEach(b => {
-    const issueLower = (b.issue || '').toLowerCase();
+  bugs.forEach(bug => {
+    const issue = bug.issue || bug.title || '';
+    const issueLower = issue.toLowerCase();
+    const severity = bug.severity || 'MEDIUM';
 
-    // eslint no-unused-vars
-    if (issueLower.includes('no-unused-vars') || issueLower.includes('is defined but never used') || issueLower.includes('unused variable')) {
-      const varName = extractUnusedVarName(b.issue);
-      rawFixes.push({
-        category: 'Code Quality',
-        severity: b.severity || 'MEDIUM',
-        text: `Remove unused variable \`${varName}\` in \`${b.file}\`.`,
-        effort: 'Quick (< 5 min)',
-        docs: 'https://eslint.org/docs/latest/rules/no-unused-vars'
-      });
-    } 
-    // Empty catch or missing proper error logging
-    else if (issueLower.includes('empty catch') || issueLower.includes('uses console.error without proper logging') || issueLower.includes('without try/catch')) {
-      rawFixes.push({
-        category: 'Code Quality',
-        severity: b.severity || 'MEDIUM',
-        text: `Add robust error logging inside catch block in \`${b.file}\`.`,
-        effort: 'Quick (< 5 min)',
-        docs: 'https://eslint.org/docs/latest/rules/no-empty'
-      });
+    if (issueLower.includes('unused') || issueLower.includes('no-unused-vars')) {
+      addFix(
+        'Remove unused code',
+        'Remove unused variables, imports, and dead code to reduce noise and improve maintainability.',
+        {
+          file: bug.file,
+          type: 'bug',
+          severity,
+          effort: 'low',
+          relatedIssues: [issue],
+          docs: 'https://eslint.org/docs/latest/rules/no-unused-vars',
+        }
+      );
+    }
+
+    if (issueLower.includes('try/catch') || issueLower.includes('empty catch') || issueLower.includes('console.error') || issueLower.includes('error handling')) {
+      addFix(
+        'Improve error handling',
+        'Add explicit error handling, structured logging, and user-safe failure paths around async or risky operations.',
+        {
+          file: bug.file,
+          type: 'bug',
+          severity,
+          effort: 'low',
+          relatedIssues: [issue],
+        }
+      );
+    }
+
+    if (issueLower.includes('complexity')) {
+      addFix(
+        'Refactor complex functions',
+        'Break complex functions into smaller units with focused tests around each branch.',
+        {
+          file: bug.file,
+          type: 'bug',
+          severity,
+          effort: 'high',
+          relatedIssues: [issue],
+        }
+      );
     }
   });
 
-  // 3. Add Generic Fixes (Always included)
-  rawFixes.push({
-    category: 'Testing',
-    severity: 'LOW',
-    text: 'Add a `tests/` directory with unit tests to ensure code reliability.',
-    effort: 'Large (hours)',
-    docs: 'https://jestjs.io/docs/getting-started'
+  addFix('Validate user inputs', 'Add validation for all user-facing endpoints and functions.', {
+    type: 'improvement',
+    priority: 'medium',
+    effort: 'medium',
   });
-  
-  rawFixes.push({
-    category: 'Secrets',
-    severity: 'LOW',
-    text: 'Add `.env.example` to document all required environment variables safely.',
-    effort: 'Quick (< 5 min)',
-    docs: 'https://www.npmjs.com/package/dotenv'
+  addFix('Add or improve tests', 'Add unit and integration tests for critical behavior and scan high-risk paths in CI.', {
+    type: 'improvement',
+    priority: 'medium',
+    effort: 'high',
+    docs: 'https://jestjs.io/docs/getting-started',
   });
-  
-  rawFixes.push({
-    category: 'Dependencies',
-    severity: 'LOW',
-    text: 'Enable GitHub Dependabot for automated dependency updates.',
-    effort: 'Quick (< 5 min)',
-    docs: 'https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates'
+  addFix('Automate dependency review', 'Enable Dependabot or a similar tool for recurring dependency and security update checks.', {
+    type: 'improvement',
+    priority: 'low',
+    effort: 'low',
+    docs: 'https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates',
   });
 
-  // 4. Prioritize fixes: CRITICAL -> HIGH -> MEDIUM -> LOW -> INFO
-  const severityScore = { CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4, INFO: 5 };
-  rawFixes.sort((a, b) => {
-    const scoreA = severityScore[a.severity] || 6;
-    const scoreB = severityScore[b.severity] || 6;
-    return scoreA - scoreB;
-  });
+  return Array.from(fixes.values());
+};
 
-  // 5. Deduplicate based on exact text
-  const uniqueFixes = [];
-  const seen = new Set();
-  
-  for (const f of rawFixes) {
-    if (!seen.has(f.text)) {
-      seen.add(f.text);
-      uniqueFixes.push(f);
-    }
-  }
-
-  // 6. Format into Markdown
-  return uniqueFixes.map(f => {
-    let md = `**[${f.category}]** `;
-    
-    if (f.severity === 'CRITICAL' || f.severity === 'HIGH') md += `🔴 **${f.severity}**: `;
-    else if (f.severity === 'MEDIUM') md += `🟠 **${f.severity}**: `;
-    else if (f.severity === 'LOW') md += `🟡 **${f.severity}**: `;
-    else md += `🔵 **${f.severity}**: `;
-    
-    md += `${f.text} *(Effort: ${f.effort})*`;
-    if (f.docs) md += ` - [Docs](${f.docs})`;
-    
-    return md;
-  });
-}
+// Made with Bob

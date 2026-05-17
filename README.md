@@ -259,4 +259,4 @@ For issues or questions during the hackathon, contact the team.
 
 ---
 
-Built with ❤️ for [Hackathon Name]
+Built with ❤️ for IBM Bob Hackathon

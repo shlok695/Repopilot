@@ -284,6 +284,14 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
+## Accessibility & Mobile Checklist
+
+- Run Lighthouse in Chrome DevTools.
+- Confirm Performance >80.
+- Confirm Accessibility >90.
+- Confirm keyboard navigation works.
+- Confirm 375px mobile layout is usable.
+
 ## 📝 License
 
 This project is part of RepoPilot and follows the same license.

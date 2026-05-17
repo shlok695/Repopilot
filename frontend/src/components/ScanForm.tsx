@@ -6,6 +6,8 @@ interface ScanFormProps {
   isLoading: boolean;
 }
 
+const MAX_ZIP_SIZE_MB = 25;
+
 const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
   const [scanType, setScanType] = useState<'github' | 'zip'>('github');
   const [repoUrl, setRepoUrl] = useState('');
@@ -15,10 +17,18 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
   const isMockMode = import.meta.env.VITE_MOCK_API === 'true';
 
   const validateGitHubUrl = (url: string): boolean => {
-    if (!url.startsWith('https://github.com/')) {
-      setUrlError('URL must start with https://github.com/');
+    // Check if empty
+    if (!url || url.trim() === '') {
+      setUrlError('Please enter a GitHub repository URL.');
       return false;
     }
+
+    // Check if valid GitHub URL
+    if (!url.startsWith('https://github.com/')) {
+      setUrlError('Please enter a valid GitHub repository URL.');
+      return false;
+    }
+
     setUrlError('');
     return true;
   };
@@ -26,16 +36,20 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      // Check if ZIP file
       if (!selectedFile.name.endsWith('.zip')) {
-        setFileError('Only .zip files are allowed');
+        setFileError('Please upload a ZIP file.');
         setFile(null);
         return;
       }
-      if (selectedFile.size > 25 * 1024 * 1024) {
-        setFileError('File size must be less than 25MB');
+
+      // Check file size
+      if (selectedFile.size > MAX_ZIP_SIZE_MB * 1024 * 1024) {
+        setFileError('ZIP file exceeds 25 MB limit. Please use a smaller repo.');
         setFile(null);
         return;
       }
+
       setFileError('');
       setFile(selectedFile);
     }
@@ -51,7 +65,7 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
       onSubmit({ type: 'github', repoUrl });
     } else {
       if (!file) {
-        setFileError('Please select a ZIP file');
+        setFileError('Please upload a ZIP file.');
         return;
       }
       onSubmit({ type: 'zip', file });
@@ -62,41 +76,45 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Scan Type Toggle */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Select Input Type
-        </label>
-        <div className="flex space-x-4">
-          <button
-            type="button"
-            onClick={() => setScanType('github')}
-            className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
-              scanType === 'github'
-                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-            }`}
-          >
-            <div className="text-2xl mb-1">🔗</div>
-            <div className="font-medium">GitHub URL</div>
-          </button>
-          <button
-            type="button"
-            onClick={() => setScanType('zip')}
-            className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
-              scanType === 'zip'
-                ? 'border-blue-500 bg-blue-50 text-blue-700'
-                : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
-            }`}
-          >
-            <div className="text-2xl mb-1">📦</div>
-            <div className="font-medium">ZIP Upload</div>
-          </button>
-        </div>
+        <fieldset>
+          <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Select Input Type
+          </legend>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              type="button"
+              onClick={() => setScanType('github')}
+              aria-pressed={scanType === 'github'}
+              className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                scanType === 'github'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500'
+              }`}
+            >
+              <div className="text-2xl mb-1" aria-hidden="true">🔗</div>
+              <div className="font-medium">GitHub URL</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setScanType('zip')}
+              aria-pressed={scanType === 'zip'}
+              className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+                scanType === 'zip'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500'
+              }`}
+            >
+              <div className="text-2xl mb-1" aria-hidden="true">📦</div>
+              <div className="font-medium">ZIP Upload</div>
+            </button>
+          </div>
+        </fieldset>
       </div>
 
       {/* GitHub URL Input */}
       {scanType === 'github' && (
         <div>
-          <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             GitHub Repository URL
           </label>
           <input
@@ -109,20 +127,22 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
                 ? 'https://github.com/example/react-dashboard-demo'
                 : 'https://github.com/username/repository'
             }
-            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-              urlError ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
+              urlError ? 'border-red-500 dark:border-red-400' : 'border-gray-300 dark:border-gray-600'
             }`}
             disabled={isLoading}
+            aria-invalid={!!urlError}
+            aria-describedby={urlError ? 'url-error' : isMockMode ? 'url-hint-mock' : 'url-hint'}
           />
           {urlError && (
-            <p className="mt-2 text-sm text-red-600">{urlError}</p>
+            <p id="url-error" className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">{urlError}</p>
           )}
           {isMockMode ? (
-            <p className="mt-2 text-sm text-blue-600">
+            <p id="url-hint-mock" className="mt-2 text-sm text-blue-600 dark:text-blue-400">
               💡 Mock mode is active. Try a React repo URL or use a Flask/Python keyword to see Python mock data.
             </p>
           ) : (
-            <p className="mt-2 text-sm text-gray-500">
+            <p id="url-hint" className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               Example: https://github.com/facebook/react
             </p>
           )}
@@ -132,13 +152,13 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
       {/* ZIP File Upload */}
       {scanType === 'zip' && (
         <div>
-          <label htmlFor="zipFile" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="zipFile" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Upload ZIP File
           </label>
-          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-gray-400 transition-colors">
+          <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg hover:border-gray-400 dark:hover:border-gray-500 transition-colors bg-white dark:bg-gray-700">
             <div className="space-y-1 text-center">
               <svg
-                className="mx-auto h-12 w-12 text-gray-400"
+                className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
                 stroke="currentColor"
                 fill="none"
                 viewBox="0 0 48 48"
@@ -151,10 +171,10 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
                   strokeLinejoin="round"
                 />
               </svg>
-              <div className="flex text-sm text-gray-600">
+              <div className="flex text-sm text-gray-600 dark:text-gray-400">
                 <label
                   htmlFor="zipFile"
-                  className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                  className="relative cursor-pointer bg-white dark:bg-gray-700 rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 dark:focus-within:ring-offset-gray-700 focus-within:ring-blue-500"
                 >
                   <span>Upload a file</span>
                   <input
@@ -165,20 +185,22 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
                     onChange={handleFileChange}
                     className="sr-only"
                     disabled={isLoading}
+                    aria-describedby={fileError ? 'file-error' : 'file-hint'}
+                    aria-invalid={!!fileError}
                   />
                 </label>
                 <p className="pl-1">or drag and drop</p>
               </div>
-              <p className="text-xs text-gray-500">ZIP files up to 25MB</p>
+              <p id="file-hint" className="text-xs text-gray-500 dark:text-gray-400">ZIP files up to 25MB</p>
             </div>
           </div>
           {file && (
-            <p className="mt-2 text-sm text-green-600">
-              ✓ Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+            <p className="mt-2 text-sm text-green-600 dark:text-green-400" role="status">
+              ✓ Selected: <span className="font-mono">{file.name}</span> ({(file.size / 1024 / 1024).toFixed(2)} MB)
             </p>
           )}
           {fileError && (
-            <p className="mt-2 text-sm text-red-600">{fileError}</p>
+            <p id="file-error" className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">{fileError}</p>
           )}
         </div>
       )}
@@ -187,11 +209,12 @@ const ScanForm: React.FC<ScanFormProps> = ({ onSubmit, isLoading }) => {
       <button
         type="submit"
         disabled={isLoading}
-        className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-colors ${
+        className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
           isLoading
-            ? 'bg-gray-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700'
+            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+            : 'bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600'
         }`}
+        aria-label={isLoading ? 'Scanning repository' : 'Start repository scan'}
       >
         {isLoading ? 'Scanning...' : 'Scan Repository'}
       </button>

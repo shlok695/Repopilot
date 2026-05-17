@@ -37,14 +37,14 @@ describe('ScanForm', () => {
     render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
     
     const input = screen.getByPlaceholderText(/https:\/\/github.com/i);
-    const submitButton = screen.getByRole('button', { name: /Scan Repository/i });
+    const submitButton = screen.getByRole('button', { name: /Start repository scan/i });
     
     // Enter invalid URL
     await userEvent.type(input, 'https://gitlab.com/user/repo');
     await userEvent.click(submitButton);
     
     // Should show error
-    expect(screen.getByText(/URL must start with https:\/\/github.com/i)).toBeInTheDocument();
+    expect(screen.getByText(/Please enter a valid GitHub repository URL/i)).toBeInTheDocument();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
@@ -53,7 +53,7 @@ describe('ScanForm', () => {
     render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
     
     const input = screen.getByPlaceholderText(/https:\/\/github.com/i);
-    const submitButton = screen.getByRole('button', { name: /Scan Repository/i });
+    const submitButton = screen.getByRole('button', { name: /Start repository scan/i });
     
     // Enter valid URL
     await userEvent.type(input, 'https://github.com/facebook/react');
@@ -91,7 +91,7 @@ describe('ScanForm', () => {
     
     // Should show file name
     await waitFor(() => {
-      expect(screen.getByText(/Selected: test-repo.zip/i)).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Selected: test-repo.zip');
     });
   });
 
@@ -113,7 +113,7 @@ describe('ScanForm', () => {
     
     // Should show error
     await waitFor(() => {
-      expect(screen.getByText(/Only .zip files are allowed/i)).toBeInTheDocument();
+      expect(screen.getByText(/Please upload a ZIP file/i)).toBeInTheDocument();
     });
   });
 
@@ -140,12 +140,108 @@ describe('ScanForm', () => {
     const input = screen.getByLabelText(/Upload ZIP File/i);
     await userEvent.upload(input, file);
 
-    await userEvent.click(screen.getByRole('button', { name: /Scan Repository/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Start repository scan/i }));
 
     expect(mockOnSubmit).toHaveBeenCalledWith({
       type: 'zip',
       file,
     });
+  });
+
+  it('shows validation error for empty GitHub URL', async () => {
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+    
+    const submitButton = screen.getByRole('button', { name: /Start repository scan/i });
+    
+    // Submit without entering URL
+    await userEvent.click(submitButton);
+    
+    // Should show error
+    expect(screen.getByText(/Please enter a GitHub repository URL/i)).toBeInTheDocument();
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  it('shows validation error for invalid GitHub URL format', async () => {
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+    
+    const input = screen.getByPlaceholderText(/https:\/\/github.com/i);
+    const submitButton = screen.getByRole('button', { name: /Start repository scan/i });
+    
+    // Enter invalid URL
+    await userEvent.type(input, 'https://gitlab.com/user/repo');
+    await userEvent.click(submitButton);
+    
+    // Should show error
+    expect(screen.getByText(/Please enter a valid GitHub repository URL/i)).toBeInTheDocument();
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  it('shows validation error for non-ZIP file upload', async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+    
+    // Switch to ZIP upload
+    const zipButton = screen.getByRole('button', { name: /ZIP Upload/i });
+    await user.click(zipButton);
+    
+    // Create a mock non-ZIP file
+    const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+    const input = screen.getByLabelText(/Upload ZIP File/i);
+    
+    // Upload file
+    await user.upload(input, file);
+    
+    // Should show error
+    await waitFor(() => {
+      expect(screen.getByText(/Please upload a ZIP file/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows validation error for ZIP file exceeding 25 MB', async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+    
+    // Switch to ZIP upload
+    const zipButton = screen.getByRole('button', { name: /ZIP Upload/i });
+    await user.click(zipButton);
+    
+    // Create a mock file larger than 25 MB
+    const largeContent = new Array(26 * 1024 * 1024).fill('a').join('');
+    const file = new File([largeContent], 'large-repo.zip', { type: 'application/zip' });
+    const input = screen.getByLabelText(/Upload ZIP File/i);
+    
+    // Upload file
+    await user.upload(input, file);
+    
+    // Should show error
+    await waitFor(() => {
+      expect(screen.getByText(/ZIP file exceeds 25 MB limit/i)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Start repository scan/i }));
+
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  it('shows validation error when submitting without selecting a file', async () => {
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+    
+    // Switch to ZIP upload
+    const zipButton = screen.getByRole('button', { name: /ZIP Upload/i });
+    await userEvent.click(zipButton);
+    
+    // Submit without selecting file
+    const submitButton = screen.getByRole('button', { name: /Start repository scan/i });
+    await userEvent.click(submitButton);
+    
+    // Should show error
+    expect(screen.getByText(/Please upload a ZIP file/i)).toBeInTheDocument();
+    expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 
 });

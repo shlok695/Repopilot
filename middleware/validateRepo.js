@@ -156,10 +156,11 @@ export function validateZipFile(file) {
   }
 
   // Rule 4: size check
-  const maxBytes = config.maxZipSizeMb * 1024 * 1024;
+  const maxZipSizeMb = config.maxZipSizeMb || config.MAX_ZIP_SIZE_MB || 25;
+  const maxBytes = maxZipSizeMb * 1024 * 1024;
   if (file.size > maxBytes) {
     const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-    return { valid: false, error: `File size ${sizeMB}MB exceeds maximum of ${config.maxZipSizeMb}MB` };
+    return { valid: false, error: `File size ${sizeMB}MB exceeds maximum of ${maxZipSizeMb}MB` };
   }
 
   // Rule 5: PK signature check (magic bytes)
@@ -197,7 +198,8 @@ export function validateZipFile(file) {
  * @returns {{ allowed: boolean, count: number }}
  */
 function checkScanRateLimit() {
-  const scansDir = path.join(config.tmpDir, 'repos');
+  const tmpDir = config.tmpDir || config.TMP_DIR || '/tmp/repopilot';
+  const scansDir = path.join(tmpDir, 'repos');
   try {
     if (!fs.existsSync(scansDir)) {
       return { allowed: true, count: 0 };

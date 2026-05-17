@@ -40,6 +40,7 @@ const fakeMetadata = {
   hasTests: true,
   fileCount: 42,
   totalLines: 1500,
+  packageManager: 'unknown',
 };
 
 const fakeReadme = {
@@ -233,9 +234,10 @@ describe('scanOrchestrator – runFullScan', () => {
     expect(result.suggestedFixes.length).toBeGreaterThan(0);
 
     // At least one fix should reference updating dependencies
-    const hasDependencyFix = result.suggestedFixes.some(fix =>
-      fix.toLowerCase().includes('update') || fix.toLowerCase().includes('dependency')
-    );
+    const hasDependencyFix = result.suggestedFixes.some(fix => {
+      const text = typeof fix === 'string' ? fix : `${fix.title || ''} ${fix.description || ''}`;
+      return text.toLowerCase().includes('update') || text.toLowerCase().includes('dependency');
+    });
     expect(hasDependencyFix).toBe(true);
   });
 

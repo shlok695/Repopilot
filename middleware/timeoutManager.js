@@ -21,7 +21,7 @@ export class TimeoutError extends Error {
  * @returns {Promise<any>}
  */
 export async function withTimeout(promise, ms, label = 'Operation') {
-  const timeoutMs = config.agentTimeoutMs || ms;
+  const timeoutMs = ms || config.agentTimeoutMs;
 
   let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
@@ -74,7 +74,7 @@ export async function withRetry(fn, retries = 1, delayMs = 2000) {
  * @param {number} timeoutMs 
  * @returns {Promise<{stdout: string, stderr: string, code: number}>}
  */
-export function spawnWithTimeout(command, args, cwd, timeoutMs) {
+export function spawnWithTimeout(command, args, cwd, timeoutMs, options = {}) {
   return new Promise((resolve, reject) => {
     // If not provided, fallback to environment var or 30s
     const ms = timeoutMs || (process.env.AGENT_TIMEOUT_MS ? parseInt(process.env.AGENT_TIMEOUT_MS, 10) : 30000);
@@ -84,7 +84,11 @@ export function spawnWithTimeout(command, args, cwd, timeoutMs) {
     let isFinished = false;
 
     // Use shell for complex commands if needed, but array of args is preferred
-    const child = spawn(command, args, { cwd, shell: true });
+    const child = spawn(command, args, {
+      cwd,
+      shell: true,
+      env: options.env || process.env,
+    });
 
     const timeoutId = setTimeout(() => {
       if (!isFinished) {

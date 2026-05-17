@@ -294,7 +294,7 @@ describe('ResultsDashboard', () => {
       
       const downloadButton = screen.getByText('📥 Download Full Report');
       expect(downloadButton).not.toBeDisabled();
-      expect(downloadButton).toHaveAttribute('href', '/api/scan/test-scan-123/download');
+      expect(downloadButton).toHaveAttribute('href', '/api/scan/test-scan-123/report');
     });
 
     it('download button is disabled when scanId is missing', () => {

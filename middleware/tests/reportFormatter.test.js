@@ -27,41 +27,18 @@ describe('formatFinalReport', () => {
   test('contains all required sections', () => {
     const result = formatFinalReport(baseScanResult);
 
-    // 1. Title & Metadata
-    expect(result).toContain('# 🛡️ RepoPilot Security & Code Quality Report');
+    expect(result).toContain('# RepoPilot Security & Code Quality Report');
     expect(result).toContain('scan_test_123');
-    
-    // 2. Executive Summary
-    expect(result).toContain('## 📊 Executive Summary');
-    
-    // 3. Repository Overview
-    expect(result).toContain('## 📦 Repository Overview');
-    
-    // 4. Architecture Diagram
-    expect(result).toContain('## 🏗️ Architecture Overview');
-    expect(result).toContain('```mermaid');
-    
-    // 5. Generated README
-    expect(result).toContain('## 📝 Generated README');
+    expect(result).toContain('## Executive Summary');
+    expect(result).toContain('## Repository Overview');
+    expect(result).toContain('## Generated README');
     expect(result).toContain('TestRepo Readme');
-    
-    // 6. Vulnerability Findings
-    expect(result).toContain('## 🔒 Security Vulnerabilities');
-    
-    // 7. Bug & Code Quality Findings
-    expect(result).toContain('## 🐛 Bug & Code Quality Findings');
-    
-    // 8. Suggested Fixes
-    expect(result).toContain('## 💡 Suggested Fixes');
-    
-    // 9. Testing Recommendations
-    expect(result).toContain('## 🧪 Testing Recommendations');
-    
-    // 10. Security Notes
-    expect(result).toContain('## 🔐 Security Notes');
-    
-    // 11. Final Recommendation (Warning is conditional, so skip explicit index 11)
-    expect(result).toContain('## 🎯 Final Recommendation');
+    expect(result).toContain('## Security Vulnerabilities');
+    expect(result).toContain('## Code Quality Issues');
+    expect(result).toContain('## Suggested Fixes');
+    expect(result).toContain('## Testing Recommendations');
+    expect(result).toContain('## Security Notes');
+    expect(result).toContain('## Final Recommendation');
   });
 
   test('table rows match finding counts', () => {
@@ -80,23 +57,18 @@ describe('formatFinalReport', () => {
 
     const result = formatFinalReport(scanResult);
 
-    // Vulns table should have 2 finding rows + 2 header rows
     const vulnMatches = result.match(/\|.*npm audit.*\|/g);
     expect(vulnMatches).toHaveLength(1);
-    
+
     const vulnMatches2 = result.match(/\|.*semgrep.*\|/g);
     expect(vulnMatches2).toHaveLength(1);
 
-    // Bugs table should have 1 finding row
     const bugMatches = result.match(/\|.*eslint.*\|/g);
     expect(bugMatches).toHaveLength(1);
 
-    // Warnings should be present
-    expect(result).toContain('## ⚠️ Warnings');
+    expect(result).toContain('## Warnings');
     expect(result).toContain('- A warning occurred');
-    
-    // Executive summary top findings
-    expect(result).toContain('**Top Critical Findings:**');
+    expect(result).toContain('**Top Findings:**');
   });
 
   test('HIGH verdict for high-severity input', () => {
@@ -108,7 +80,7 @@ describe('formatFinalReport', () => {
     };
 
     const result = formatFinalReport(scanResult);
-    expect(result).toContain('🔴 **Immediate action required**');
+    expect(result).toContain('Immediate action required: high or critical security findings should be fixed before production use.');
   });
 
   test('MEDIUM verdict for medium-severity input', () => {
@@ -120,7 +92,7 @@ describe('formatFinalReport', () => {
     };
 
     const result = formatFinalReport(scanResult);
-    expect(result).toContain('🟠 **Review before production**');
+    expect(result).toContain('Review before production: medium severity issues should be scheduled before the next release.');
   });
 
   test('LOW verdict for no high/medium-severity input', () => {
@@ -132,12 +104,11 @@ describe('formatFinalReport', () => {
     };
 
     const result = formatFinalReport(scanResult);
-    expect(result).toContain('🟢 **Good shape, minor improvements suggested**');
+    expect(result).toContain('Good shape overall: no high-severity findings were detected, but review the suggested improvements.');
   });
 
   test('testing recommendations correctly map to tech stack', () => {
     const result = formatFinalReport(baseScanResult);
-    // Based on 'React', 'Express', 'JavaScript', 'TypeScript', 'Docker'
     expect(result).toContain('### React');
     expect(result).toContain('### Express');
     expect(result).toContain('### JavaScript');
@@ -156,18 +127,18 @@ describe('formatFinalReport', () => {
     const result = formatFinalReport(scanResult);
     expect(result).toContain('tool\\|with\\|pipes');
     expect(result).toContain('issue\\|with\\|pipe');
-    expect(result).toContain('file name'); // newlines replaced by space
+    expect(result).toContain('file name');
   });
 
   test('missing fields fallback gracefully', () => {
     const emptyResult = { scanId: '123' };
     const result = formatFinalReport(emptyResult);
-    
+
     expect(result).toContain('123');
-    expect(result).toContain('Unknown'); // For repo name
+    expect(result).toContain('Unknown');
     expect(result).toContain('_No README was generated for this repository._');
-    expect(result).toContain('✅ No vulnerabilities detected.');
-    expect(result).toContain('✨ No code quality issues detected.');
-    expect(result).toContain('✅ No fixes needed.');
+    expect(result).toContain('No vulnerabilities detected.');
+    expect(result).toContain('No code quality issues detected.');
+    expect(result).toContain('No fixes needed.');
   });
 });

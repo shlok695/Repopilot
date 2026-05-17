@@ -41,6 +41,7 @@ export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
     const issue = vuln.issue || vuln.title || '';
     const issueLower = issue.toLowerCase();
     const severity = vuln.severity || 'MEDIUM';
+    let matchedSpecificFix = false;
 
     if (vuln.tool === 'npm audit' || issueLower.includes('dependency') || issueLower.includes('package')) {
       const packageName = extractPackageName(issue);
@@ -55,6 +56,7 @@ export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
           docs: 'https://docs.npmjs.com/cli/commands/npm-audit',
         }
       );
+      matchedSpecificFix = true;
     }
 
     if (vuln.tool === 'gitleaks' || issueLower.includes('secret') || issueLower.includes('hardcoded') || issueLower.includes('credential') || issueLower.includes('key')) {
@@ -69,6 +71,7 @@ export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
           docs: 'https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning',
         }
       );
+      matchedSpecificFix = true;
     }
 
     if (issueLower.includes('injection') || issueLower.includes('sql')) {
@@ -83,6 +86,7 @@ export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
           relatedIssues: [issue],
         }
       );
+      matchedSpecificFix = true;
     }
 
     if (issueLower.includes('xss') || issueLower.includes('cross-site') || issueLower.includes('html assignment')) {
@@ -96,9 +100,10 @@ export const generateSuggestedFixes = (vulnerabilities = [], bugs = []) => {
           relatedIssues: [issue],
         }
       );
+      matchedSpecificFix = true;
     }
 
-    if (!issueLower.includes('dependency') && !issueLower.includes('package') && !issueLower.includes('secret') && !issueLower.includes('hardcoded') && !issueLower.includes('credential') && !issueLower.includes('key') && !issueLower.includes('injection') && !issueLower.includes('sql') && !issueLower.includes('xss') && !issueLower.includes('cross-site')) {
+    if (!matchedSpecificFix) {
       addFix(
         'Review security finding',
         `Review and fix the security issue${vuln.file ? ` in \`${vuln.file}\`` : ''}. ${vuln.recommendation || 'Follow the scanner recommendation and rerun the scan.'}`,

@@ -118,6 +118,7 @@ const parsePackageJson = async (repoPath) => {
       .slice(0, 5);
 
     return {
+      name: pkg.name || '',
       version: pkg.version || 'unknown',
       description: pkg.description || '',
       scripts: Object.keys(pkg.scripts || {}),
@@ -429,6 +430,7 @@ export async function analyzeRepo(repoPath) {
   
   // Walk directory and collect information
   const { files, extensions, topLevelFolders, importantFiles, linesOfCode } = await walkDirectory(repoPath);
+  const totalLines = Object.values(linesOfCode).reduce((sum, count) => sum + count, 0);
   
   // Parse package.json
   const packageJsonData = await parsePackageJson(repoPath);
@@ -453,14 +455,30 @@ export async function analyzeRepo(repoPath) {
   return {
     name,
     techStack,
+    languages: techStack.filter(item => [
+      'JavaScript',
+      'TypeScript',
+      'Python',
+      'Java',
+      'Go',
+      'Rust',
+      'Ruby',
+      'PHP',
+    ].includes(item)),
     packageManager,
     totalFiles: files.length,
+    fileCount: files.length,
     mainFolders: Array.from(topLevelFolders),
     importantFiles,
     detectedFrameworks,
+    frameworks: detectedFrameworks,
+    hasDocker: techStack.includes('Docker'),
+    hasTests: testFrameworks.length > 0 || topLevelFolders.has('test') || topLevelFolders.has('tests') || topLevelFolders.has('__tests__'),
     summary,
     linesOfCode,
+    totalLines,
     packageJson: packageJsonData ? {
+      name: packageJsonData.name || name,
       version: packageJsonData.version,
       description: packageJsonData.description,
       scripts: packageJsonData.scripts,

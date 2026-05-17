@@ -95,7 +95,17 @@ const getLicenseInfo = (licenseName) => {
   
   // Check exact matches first
   for (const [key, info] of Object.entries(LICENSE_COMPATIBILITY)) {
-    if (normalized === key.toUpperCase() || normalized.includes(key.toUpperCase())) {
+    if (normalized === key.toUpperCase()) {
+      return { name: key, ...info };
+    }
+  }
+
+  // Then check broader matches, longest names first so AGPL does not get
+  // classified as GPL just because it contains the substring.
+  const sortedLicenses = Object.entries(LICENSE_COMPATIBILITY)
+    .sort(([a], [b]) => b.length - a.length);
+  for (const [key, info] of sortedLicenses) {
+    if (normalized.includes(key.toUpperCase())) {
       return { name: key, ...info };
     }
   }

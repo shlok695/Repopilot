@@ -92,9 +92,13 @@ const calculateEntropy = (str) => {
 /**
  * Check if file should be excluded from scanning
  */
-const shouldExcludeFile = (filePath) => {
+const shouldExcludeFile = (filePath, repoPath = '') => {
   const fileName = path.basename(filePath);
-  const dirName = path.dirname(filePath);
+  const relativePath = repoPath
+    ? path.relative(repoPath, filePath)
+    : filePath;
+  const normalizedRelativePath = relativePath.replace(/\\/g, '/');
+  const dirName = path.dirname(normalizedRelativePath).replace(/\\/g, '/');
   
   // Exclude test files
   if (fileName.includes('.test.') ||
@@ -104,10 +108,10 @@ const shouldExcludeFile = (filePath) => {
       fileName.endsWith('.test.js') ||
       fileName.endsWith('.test.ts') ||
       dirName.includes('__tests__') ||
-      dirName.includes('/test/') ||
-      dirName.includes('/tests/') ||
-      dirName.includes('\\test\\') ||
-      dirName.includes('\\tests\\')) {
+      normalizedRelativePath.startsWith('test/') ||
+      normalizedRelativePath.startsWith('tests/') ||
+      normalizedRelativePath.includes('/test/') ||
+      normalizedRelativePath.includes('/tests/')) {
     return true;
   }
   
@@ -214,7 +218,7 @@ const runPatternScan = async (repoPath) => {
     files.forEach(filePath => {
       try {
         // Skip excluded files (test files, .env.example, etc.)
-        if (shouldExcludeFile(filePath)) {
+        if (shouldExcludeFile(filePath, repoPath)) {
           skippedFiles++;
           return;
         }

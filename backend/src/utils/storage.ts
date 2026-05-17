@@ -1,8 +1,11 @@
 import { writeFile, readFile, readdir, stat, mkdir, rm, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, posix } from 'path';
 
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
+const storagePath = (...parts: string[]): string => {
+  return TMP_DIR.startsWith('/') ? posix.join(TMP_DIR, ...parts) : join(TMP_DIR, ...parts);
+};
 
 // Custom Error Classes
 export class NotFoundError extends Error {
@@ -34,7 +37,7 @@ const ensureDirectory = async (dirPath: string): Promise<void> => {
 // Save scan result to JSON file
 export const saveScanResult = async (scanId: string, result: any): Promise<void> => {
   try {
-    const resultsDir = join(TMP_DIR, 'results');
+    const resultsDir = storagePath('results');
     await ensureDirectory(resultsDir);
     
     // Add createdAt timestamp if not present
@@ -43,7 +46,7 @@ export const saveScanResult = async (scanId: string, result: any): Promise<void>
       createdAt: result.createdAt || Date.now(),
     };
     
-    const resultPath = join(resultsDir, `${scanId}.json`);
+    const resultPath = TMP_DIR.startsWith('/') ? posix.join(resultsDir, `${scanId}.json`) : join(resultsDir, `${scanId}.json`);
     await writeFile(resultPath, JSON.stringify(resultWithTimestamp, null, 2), 'utf-8');
   } catch (error) {
     throw new StorageError(`Failed to save scan result: ${(error as Error).message}`);
@@ -52,7 +55,7 @@ export const saveScanResult = async (scanId: string, result: any): Promise<void>
 
 // Get scan result from JSON file
 export const getScanResult = async (scanId: string): Promise<any> => {
-  const resultPath = join(TMP_DIR, 'results', `${scanId}.json`);
+  const resultPath = storagePath('results', `${scanId}.json`);
   
   if (!existsSync(resultPath)) {
     throw new NotFoundError(`Scan result not found: ${scanId}`);
@@ -79,10 +82,10 @@ export const getScanResult = async (scanId: string): Promise<any> => {
 // Save report markdown file
 export const saveReport = async (scanId: string, markdown: string): Promise<void> => {
   try {
-    const reportsDir = join(TMP_DIR, 'reports');
+    const reportsDir = storagePath('reports');
     await ensureDirectory(reportsDir);
     
-    const reportPath = join(reportsDir, `${scanId}.md`);
+    const reportPath = TMP_DIR.startsWith('/') ? posix.join(reportsDir, `${scanId}.md`) : join(reportsDir, `${scanId}.md`);
     await writeFile(reportPath, markdown, 'utf-8');
   } catch (error) {
     throw new StorageError(`Failed to save report: ${(error as Error).message}`);
@@ -91,7 +94,7 @@ export const saveReport = async (scanId: string, markdown: string): Promise<void
 
 // Get report file path
 export const getReportPath = (scanId: string): string => {
-  const reportPath = join(TMP_DIR, 'reports', `${scanId}.md`);
+  const reportPath = storagePath('reports', `${scanId}.md`);
   
   if (!existsSync(reportPath)) {
     throw new NotFoundError(`Report not found: ${scanId}`);
@@ -110,7 +113,7 @@ export interface ScanSummary {
 
 // List recent scans (returns scan summaries)
 export const listRecentScans = async (limit: number = 10): Promise<ScanSummary[]> => {
-  const resultsDir = join(TMP_DIR, 'results');
+  const resultsDir = storagePath('results');
   
   if (!existsSync(resultsDir)) {
     return [];
@@ -124,7 +127,7 @@ export const listRecentScans = async (limit: number = 10): Promise<ScanSummary[]
     const scans = await Promise.all(
       jsonFiles.map(async (file) => {
         try {
-          const filePath = join(resultsDir, file);
+          const filePath = TMP_DIR.startsWith('/') ? posix.join(resultsDir, file) : join(resultsDir, file);
           const content = await readFile(filePath, 'utf-8');
           const result = JSON.parse(content);
           
@@ -166,9 +169,9 @@ export const listRecentScans = async (limit: number = 10): Promise<ScanSummary[]
 
 // Delete a scan (remove all associated files)
 export const deleteScan = async (scanId: string): Promise<void> => {
-  const repoPath = join(TMP_DIR, 'repos', scanId);
-  const resultPath = join(TMP_DIR, 'results', `${scanId}.json`);
-  const reportPath = join(TMP_DIR, 'reports', `${scanId}.md`);
+  const repoPath = storagePath('repos', scanId);
+  const resultPath = storagePath('results', `${scanId}.json`);
+  const reportPath = storagePath('reports', `${scanId}.md`);
   
   // Check if scan exists
   if (!existsSync(resultPath)) {
@@ -201,9 +204,9 @@ export const deleteScan = async (scanId: string): Promise<void> => {
 export const cleanupScanFolder = async (scanId: string): Promise<void> => {
   console.log(`[${scanId}] Starting cleanup...`);
   
-  const repoPath = join(TMP_DIR, 'repos', scanId);
-  const resultPath = join(TMP_DIR, 'results', `${scanId}.json`);
-  const reportPath = join(TMP_DIR, 'reports', `${scanId}.md`);
+  const repoPath = storagePath('repos', scanId);
+  const resultPath = storagePath('results', `${scanId}.json`);
+  const reportPath = storagePath('reports', `${scanId}.md`);
   
   // Delete repo folder
   try {
@@ -243,7 +246,7 @@ export const autoCleanup = async (): Promise<void> => {
   const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
   const now = Date.now();
   
-  const reposDir = join(TMP_DIR, 'repos');
+  const reposDir = storagePath('repos');
   
   if (!existsSync(reposDir)) {
     return;
@@ -253,7 +256,7 @@ export const autoCleanup = async (): Promise<void> => {
     const folders = await readdir(reposDir);
     
     for (const folder of folders) {
-      const folderPath = join(reposDir, folder);
+      const folderPath = TMP_DIR.startsWith('/') ? posix.join(reposDir, folder) : join(reposDir, folder);
       
       try {
         const stats = await stat(folderPath);

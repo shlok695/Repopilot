@@ -200,11 +200,12 @@ export async function analyzeComplexity(repoPath, repoMetadata) {
   let complexFiles = [];
   const warnings = [];
   let fileSizes = [];
+  const languages = repoMetadata.languages || repoMetadata.techStack || [];
 
   // Check if plato is available
   const hasPlato = await isPlatoAvailable();
 
-  if (hasPlato && (repoMetadata.languages.includes('JavaScript') || repoMetadata.languages.includes('TypeScript'))) {
+  if (hasPlato && (languages.includes('JavaScript') || languages.includes('TypeScript'))) {
     warnings.push('Running plato complexity analysis...');
     const platoResult = await runPlatoAnalysis(repoPath);
     complexFiles.push(...platoResult.complexFiles);

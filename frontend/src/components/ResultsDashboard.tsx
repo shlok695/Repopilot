@@ -436,7 +436,7 @@ export default function ResultsDashboard({ scanResult }: ResultsDashboardProps) 
               {copySuccess ? '✓ Copied!' : 'Copy Markdown'}
             </button>
           </div>
-          <div className="prose max-w-none text-sm">
+          <div className="max-w-none space-y-4 text-sm text-gray-800 [&_a]:text-blue-700 [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:text-gray-950 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-950 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-gray-900 [&_li]:ml-5 [&_li]:list-disc [&_pre]:rounded-lg [&_pre]:bg-gray-50 [&_pre]:p-3 [&_pre]:text-gray-800">
             <ReactMarkdown>{readme}</ReactMarkdown>
           </div>
         </div>
@@ -570,7 +570,7 @@ export default function ResultsDashboard({ scanResult }: ResultsDashboardProps) 
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Download Report</h2>
         {scanResult?.scanId ? (
           <a
-            href={`/api/scan/${scanResult.scanId}/download`}
+            href={`/api/scan/${scanResult.scanId}/report`}
             download
             className="inline-block px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
           >

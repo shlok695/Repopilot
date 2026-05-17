@@ -1,4 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+import { pathToFileURL } from 'url';
 import { uploadMiddleware } from '../middleware/upload.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateScanId } from '../utils/scanId.js';
@@ -11,13 +14,27 @@ import { incrementTotalScans, incrementActiveScans, decrementActiveScans } from 
 const router = Router();
 const SCAN_TIMEOUT_MS = parseInt(process.env.SCAN_TIMEOUT_MS || '90000', 10);
 
+const resolveRepoModule = (relativePath: string): string => {
+  const candidates = [
+    resolve(process.cwd(), relativePath),
+    resolve(process.cwd(), '..', relativePath),
+  ];
+  const modulePath = candidates.find(candidate => existsSync(candidate));
+
+  if (!modulePath) {
+    throw new Error(`Module not found: ${relativePath}`);
+  }
+
+  return pathToFileURL(modulePath).href;
+};
+
 // Import scan orchestrator
 let runFullScan: (repoPath: string, scanId: string) => Promise<any>;
 
 // Dynamic import to handle CommonJS/ESM compatibility
 (async () => {
   try {
-    const orchestratorPath = '../../middleware/scanOrchestrator.js';
+    const orchestratorPath = resolveRepoModule('middleware/scanOrchestrator.js');
     const orchestrator = await import(orchestratorPath);
     runFullScan = orchestrator.runFullScan;
     console.log('✓ Scan orchestrator loaded successfully');
@@ -52,11 +69,11 @@ let runFullScan: (repoPath: string, scanId: string) => Promise<any>;
 })();
 
 // Import report generator
-let generateFinalReport: (scanResult: any) => string;
+let generateFinalReport: (scanResult: any) => Promise<any> | any;
 
 (async () => {
   try {
-    const reportGeneratorPath = '../../agents/reportGeneratorAgent.js';
+    const reportGeneratorPath = resolveRepoModule('agents/reportGeneratorAgent.js');
     const reportGen = await import(reportGeneratorPath);
     generateFinalReport = reportGen.generateFinalReport;
     console.log('✓ Report generator loaded successfully');
@@ -183,12 +200,20 @@ router.post('/', scanRateLimiter, uploadMiddleware.single('file'), async (req: R
       throw timeoutError;
     }
 
-    // Save results
-    await saveScanResult(scanId, scanResult);
-    
-    // Generate and save report
+    // Generate report markdown if the orchestrator did not attach it
     console.log(`[${scanId}] Generating report...`);
-    const reportMarkdown = generateFinalReport(scanResult);
+    let reportMarkdown = scanResult.reportMarkdown;
+    if (!reportMarkdown) {
+      const reportResult = await generateFinalReport(scanResult);
+      reportMarkdown = typeof reportResult === 'string' ? reportResult : reportResult.markdown;
+      scanResult = {
+        ...scanResult,
+        reportMarkdown,
+      };
+    }
+
+    // Save results and report
+    await saveScanResult(scanId, scanResult);
     await saveReport(scanId, reportMarkdown);
 
     console.log(`[${scanId}] Scan completed successfully`);

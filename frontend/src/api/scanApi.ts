@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ScanResult, ScanPayload } from '../types/scan';
 import { mockScanResult } from './mockData';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 const USE_MOCK = import.meta.env.VITE_MOCK_API === 'true';
 
 const apiClient = axios.create({
@@ -16,6 +16,10 @@ const apiClient = axios.create({
 // Simulate delay for mock API
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const unwrapScanResult = (data: ScanResult | { result: ScanResult }): ScanResult => {
+  return 'result' in data ? data.result : data;
+};
+
 export const startScan = async (payload: ScanPayload): Promise<ScanResult> => {
   if (USE_MOCK) {
     await delay(1500);
@@ -27,11 +31,11 @@ export const startScan = async (payload: ScanPayload): Promise<ScanResult> => {
   }
 
   if (payload.type === 'github') {
-    const response = await apiClient.post<ScanResult>('/api/scan', {
+    const response = await apiClient.post<ScanResult | { result: ScanResult }>('/api/scan', {
       type: 'github',
       repoUrl: payload.repoUrl,
     });
-    return response.data;
+    return unwrapScanResult(response.data);
   } else {
     const formData = new FormData();
     formData.append('type', 'zip');
@@ -39,12 +43,12 @@ export const startScan = async (payload: ScanPayload): Promise<ScanResult> => {
       formData.append('file', payload.file);
     }
 
-    const response = await apiClient.post<ScanResult>('/api/scan', formData, {
+    const response = await apiClient.post<ScanResult | { result: ScanResult }>('/api/scan', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data;
+    return unwrapScanResult(response.data);
   }
 };
 
@@ -54,8 +58,8 @@ export const getScanResult = async (scanId: string): Promise<ScanResult> => {
     return mockScanResult;
   }
 
-  const response = await apiClient.get<ScanResult>(`/api/scan/${scanId}`);
-  return response.data;
+  const response = await apiClient.get<ScanResult | { result: ScanResult }>(`/api/scan/${scanId}`);
+  return unwrapScanResult(response.data);
 };
 
 export const downloadReport = async (scanId: string): Promise<Blob> => {

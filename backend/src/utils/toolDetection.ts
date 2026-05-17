@@ -1,4 +1,6 @@
 import { exec } from 'child_process';
+import { existsSync, mkdirSync } from 'fs';
+import { join, resolve } from 'path';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -12,6 +14,43 @@ export interface ToolInfo {
 // In-memory cache for tool detection
 const toolCache: Map<string, ToolInfo> = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
+
+const getProjectRoot = (): string => {
+  const candidates = [
+    resolve(process.cwd()),
+    resolve(process.cwd(), '..'),
+  ];
+
+  return candidates.find(candidate => existsSync(join(candidate, '.tools', 'bin'))) || process.cwd();
+};
+
+const getToolEnv = (): NodeJS.ProcessEnv => {
+  const projectRoot = getProjectRoot();
+  const toolsBin = join(projectRoot, '.tools', 'bin');
+  const semgrepHome = join(projectRoot, '.tools', 'semgrep-home');
+  const semgrepCache = join(projectRoot, '.tools', 'semgrep-cache');
+
+  [semgrepHome, semgrepCache].forEach(dir => {
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+  });
+
+  const delimiter = process.platform === 'win32' ? ';' : ':';
+  const pathValue = existsSync(toolsBin)
+    ? `${toolsBin}${delimiter}${process.env.PATH || ''}`
+    : process.env.PATH;
+
+  return {
+    ...process.env,
+    PATH: pathValue,
+    Path: pathValue,
+    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME || semgrepHome,
+    XDG_CACHE_HOME: process.env.XDG_CACHE_HOME || semgrepCache,
+    SEMGREP_LOG_FILE: process.env.SEMGREP_LOG_FILE || join(semgrepHome, 'semgrep.log'),
+    SEMGREP_SETTINGS_FILE: process.env.SEMGREP_SETTINGS_FILE || join(semgrepHome, 'settings.yml'),
+  };
+};
 
 /**
  * Check if a tool is available and get its version
@@ -28,7 +67,8 @@ export const checkTool = async (toolName: string): Promise<ToolInfo> => {
   
   // Check tool availability
   try {
-    await execAsync(`which ${toolName}`);
+    const lookupCommand = process.platform === 'win32' ? `where ${toolName}` : `which ${toolName}`;
+    await execAsync(lookupCommand, { env: getToolEnv() });
     
     // Tool is available, try to get version
     const version = await getToolVersion(toolName);
@@ -66,7 +106,7 @@ const getToolVersion = async (toolName: string): Promise<string | null> => {
       versionCommand = 'pip-audit --version';
     }
     
-    const { stdout } = await execAsync(versionCommand);
+    const { stdout } = await execAsync(versionCommand, { env: getToolEnv() });
     return parseVersion(toolName, stdout);
   } catch (error) {
     return null;

@@ -73,8 +73,8 @@ npm run dev
 ```
 
 4. **Access the app**
-- Frontend: http://localhost:3000
-- Backend: http://localhost:5001
+- Frontend: http://localhost:3000/repopilot
+- Backend: http://localhost:5000
 
 ### Docker Deployment
 
@@ -96,8 +96,8 @@ docker compose logs -f
 ```
 
 4. **Access the app**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5001/api/health
+- Frontend: http://localhost:3000/repopilot
+- Backend API: http://localhost:5000/api/health
 
 ### Public Access with Tailscale Funnel
 
@@ -210,9 +210,9 @@ npm run build
 
 ### Port Already in Use
 ```bash
-# Kill process on port 3000 or 5001
+# Kill process on port 3000 or 5000
 lsof -ti:3000 | xargs kill -9
-lsof -ti:5001 | xargs kill -9
+lsof -ti:5000 | xargs kill -9
 ```
 
 ### Docker Issues

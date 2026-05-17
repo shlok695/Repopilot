@@ -1,89 +1,115 @@
+const formatFix = (fix) => {
+  if (typeof fix === 'string') {
+    return fix;
+  }
+
+  const title = fix?.title || 'Suggested fix';
+  const description = fix?.description ? ` - ${fix.description}` : '';
+  const file = fix?.file ? ` (${fix.file})` : '';
+  return `${title}${file}${description}`;
+};
+
+const escapeTableCell = (value) => {
+  return String(value ?? '')
+    .replace(/\|/g, '\\|')
+    .replace(/\r?\n/g, ' ');
+};
+
 export const formatFinalReport = (scanResult) => {
-  const { scanId, repoMetadata, readme, vulnerabilities, bugs, suggestedFixes, warnings, timestamp } = scanResult;
+  const {
+    scanId,
+    repoMetadata = {},
+    readme = {},
+    vulnerabilities = [],
+    bugs = [],
+    suggestedFixes = [],
+    warnings = [],
+    timestamp,
+  } = scanResult;
+
+  const languages = repoMetadata.languages || [];
+  const frameworks = repoMetadata.frameworks || [];
+  const fileCount = repoMetadata.fileCount || 0;
+  const totalLines = repoMetadata.totalLines || 0;
 
   const severityEmoji = {
-    HIGH: '🔴',
-    MEDIUM: '🟠',
-    LOW: '🟡',
-    INFO: '🔵',
+    CRITICAL: '[CRITICAL]',
+    HIGH: '[HIGH]',
+    MEDIUM: '[MEDIUM]',
+    LOW: '[LOW]',
+    INFO: '[INFO]',
   };
 
   let markdown = `# RepoPilot Security & Code Quality Report\n\n`;
   markdown += `**Scan ID:** \`${scanId}\`  \n`;
-  markdown += `**Generated:** ${new Date(timestamp).toLocaleString()}  \n`;
-  markdown += `**Repository:** ${repoMetadata.name}\n\n`;
+  markdown += `**Generated:** ${timestamp ? new Date(timestamp).toLocaleString() : new Date().toLocaleString()}  \n`;
+  markdown += `**Repository:** ${repoMetadata.name || 'Unknown'}\n\n`;
 
   markdown += `---\n\n`;
 
-  // Executive Summary
-  markdown += `## 📊 Executive Summary\n\n`;
+  markdown += `## Executive Summary\n\n`;
   markdown += `| Metric | Count |\n`;
   markdown += `|--------|-------|\n`;
-  markdown += `| 🔒 Vulnerabilities | ${vulnerabilities.length} |\n`;
-  markdown += `| 🐛 Bugs | ${bugs.length} |\n`;
-  markdown += `| 💡 Suggested Fixes | ${suggestedFixes.length} |\n`;
-  markdown += `| ⚠️ Warnings | ${warnings.length} |\n`;
-  markdown += `| 📁 Files | ${repoMetadata.fileCount} |\n`;
-  markdown += `| 📝 Lines of Code | ${repoMetadata.totalLines.toLocaleString()} |\n\n`;
+  markdown += `| Vulnerabilities | ${vulnerabilities.length} |\n`;
+  markdown += `| Bugs | ${bugs.length} |\n`;
+  markdown += `| Suggested Fixes | ${suggestedFixes.length} |\n`;
+  markdown += `| Warnings | ${warnings.length} |\n`;
+  markdown += `| Files | ${fileCount} |\n`;
+  markdown += `| Lines of Code | ${totalLines.toLocaleString()} |\n\n`;
 
-  // Repository Metadata
-  markdown += `## 📦 Repository Metadata\n\n`;
-  markdown += `**Languages:** ${repoMetadata.languages.join(', ')}  \n`;
-  markdown += `**Frameworks:** ${repoMetadata.frameworks.join(', ')}  \n`;
-  markdown += `**Docker:** ${repoMetadata.hasDocker ? '✅ Yes' : '❌ No'}  \n`;
-  markdown += `**Tests:** ${repoMetadata.hasTests ? '✅ Yes' : '❌ No'}  \n\n`;
+  markdown += `## Repository Metadata\n\n`;
+  markdown += `**Languages:** ${languages.join(', ') || 'Unknown'}  \n`;
+  markdown += `**Frameworks:** ${frameworks.join(', ') || 'None detected'}  \n`;
+  markdown += `**Docker:** ${repoMetadata.hasDocker ? 'Yes' : 'No'}  \n`;
+  markdown += `**Tests:** ${repoMetadata.hasTests ? 'Yes' : 'No'}  \n\n`;
 
-  // Warnings
   if (warnings.length > 0) {
-    markdown += `## ⚠️ Warnings\n\n`;
+    markdown += `## Warnings\n\n`;
     warnings.forEach(warning => {
       markdown += `- ${warning}\n`;
     });
     markdown += `\n`;
   }
 
-  // Vulnerabilities
-  markdown += `## 🔒 Security Vulnerabilities (${vulnerabilities.length})\n\n`;
+  markdown += `## Security Vulnerabilities (${vulnerabilities.length})\n\n`;
   if (vulnerabilities.length === 0) {
-    markdown += `✅ No vulnerabilities detected. Great job!\n\n`;
+    markdown += `No vulnerabilities detected.\n\n`;
   } else {
     markdown += `| Severity | Tool | File | Issue | Recommendation |\n`;
     markdown += `|----------|------|------|-------|----------------|\n`;
     vulnerabilities.forEach(vuln => {
-      markdown += `| ${severityEmoji[vuln.severity]} ${vuln.severity} | ${vuln.tool} | \`${vuln.file}\` | ${vuln.issue} | ${vuln.recommendation} |\n`;
+      const severity = vuln.severity || 'INFO';
+      markdown += `| ${severityEmoji[severity] || severity} | ${escapeTableCell(vuln.tool)} | \`${escapeTableCell(vuln.file)}\` | ${escapeTableCell(vuln.issue)} | ${escapeTableCell(vuln.recommendation)} |\n`;
     });
     markdown += `\n`;
   }
 
-  // Bugs
-  markdown += `## 🐛 Code Quality Issues (${bugs.length})\n\n`;
+  markdown += `## Code Quality Issues (${bugs.length})\n\n`;
   if (bugs.length === 0) {
-    markdown += `✨ No code quality issues detected. Excellent!\n\n`;
+    markdown += `No code quality issues detected.\n\n`;
   } else {
     markdown += `| Severity | Tool | File | Issue | Recommendation |\n`;
     markdown += `|----------|------|------|-------|----------------|\n`;
     bugs.forEach(bug => {
-      markdown += `| ${severityEmoji[bug.severity]} ${bug.severity} | ${bug.tool} | \`${bug.file}\` | ${bug.issue} | ${bug.recommendation} |\n`;
+      const severity = bug.severity || 'INFO';
+      markdown += `| ${severityEmoji[severity] || severity} | ${escapeTableCell(bug.tool)} | \`${escapeTableCell(bug.file)}\` | ${escapeTableCell(bug.issue)} | ${escapeTableCell(bug.recommendation)} |\n`;
     });
     markdown += `\n`;
   }
 
-  // Suggested Fixes
-  markdown += `## 💡 Suggested Fixes\n\n`;
+  markdown += `## Suggested Fixes\n\n`;
   if (suggestedFixes.length === 0) {
-    markdown += `✅ No fixes needed. Your repository is in great shape!\n\n`;
+    markdown += `No fixes needed.\n\n`;
   } else {
     suggestedFixes.forEach((fix, index) => {
-      markdown += `${index + 1}. ${fix}\n`;
+      markdown += `${index + 1}. ${formatFix(fix)}\n`;
     });
     markdown += `\n`;
   }
 
-  // Auto-Generated README
-  markdown += `## 📝 Auto-Generated README\n\n`;
-  markdown += `${readme.content}\n\n`;
+  markdown += `## Auto-Generated README\n\n`;
+  markdown += `${readme.content || ''}\n\n`;
 
-  // Footer
   markdown += `---\n\n`;
   markdown += `*Report generated by RepoPilot - AI-Powered Repository Analysis*  \n`;
   markdown += `*Scan ID: ${scanId}*\n`;

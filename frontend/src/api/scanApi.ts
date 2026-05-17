@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { ScanResult, ScanPayload } from '../types/scan';
 import { mockReactResult, mockFlaskResult } from './mockData';
 
@@ -13,6 +13,43 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Centralized error handler
+export const handleApiError = (error: unknown): never => {
+  console.error('API Error:', error);
+
+  if (!axios.isAxiosError(error)) {
+    throw new Error('Unexpected error occurred. Please try again.');
+  }
+
+  const axiosError = error as AxiosError<{ message?: string; error?: string; detail?: string }>;
+
+  // Network error - no response from server
+  if (!axiosError.response) {
+    throw new Error('Could not reach the server. Is the backend running?');
+  }
+
+  const status = axiosError.response.status;
+  const data = axiosError.response.data;
+
+  // Extract error message from various possible response shapes
+  const backendMessage = data?.message || data?.error || data?.detail;
+
+  switch (status) {
+    case 400:
+      throw new Error(backendMessage || 'Invalid request. Please check your input.');
+    case 413:
+      throw new Error('ZIP file exceeds 25 MB limit. Please use a smaller repo.');
+    case 429:
+      throw new Error('Rate limit reached. Try again in 60 seconds.');
+    case 503:
+      throw new Error('Scan timed out. Try a smaller repository.');
+    case 500:
+      throw new Error('Something went wrong on our end. Check backend logs.');
+    default:
+      throw new Error('Scan failed. Please try again.');
+  }
+};
 
 // Simulate delay for mock API
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -56,29 +93,33 @@ export const startScan = async (payload: ScanPayload): Promise<ScanResult> => {
     return selectMockResult(payload);
   }
 
-  if (payload.type === 'github') {
-    const response = await apiClient.post<ScanResult | { result: ScanResult }>('/api/scan', {
-      type: 'github',
-      repoUrl: payload.repoUrl,
+  try {
+    if (payload.type === 'github') {
+      const response = await apiClient.post<ScanResult | { result: ScanResult }>('/api/scan', {
+        type: 'github',
+        repoUrl: payload.repoUrl,
+      });
+
+      return unwrapScanResult(response.data);
+    }
+
+    const formData = new FormData();
+    formData.append('type', 'zip');
+
+    if (payload.file) {
+      formData.append('file', payload.file);
+    }
+
+    const response = await apiClient.post<ScanResult | { result: ScanResult }>('/api/scan', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
 
     return unwrapScanResult(response.data);
+  } catch (error) {
+    return handleApiError(error);
   }
-
-  const formData = new FormData();
-  formData.append('type', 'zip');
-
-  if (payload.file) {
-    formData.append('file', payload.file);
-  }
-
-  const response = await apiClient.post<ScanResult | { result: ScanResult }>('/api/scan', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-
-  return unwrapScanResult(response.data);
 };
 
 export const getScanResult = async (scanId: string): Promise<ScanResult> => {
@@ -95,11 +136,21 @@ export const getScanResult = async (scanId: string): Promise<ScanResult> => {
     };
   }
 
-  const response = await apiClient.get<ScanResult | { result: ScanResult }>(`/api/scan/${scanId}`);
+  try {
+    const response = await apiClient.get<ScanResult | { result: ScanResult }>(`/api/scan/${scanId}`);
 
-  return unwrapScanResult(response.data);
+    return unwrapScanResult(response.data);
+  } catch (error) {
+    return handleApiError(error);
+  }
 };
 
+// Backend contract for real report downloads:
+// GET /api/scan/:scanId/report should return Markdown bytes with
+// Content-Type: text/markdown or application/octet-stream and
+// Content-Disposition: attachment; filename="repopilot_{scanId}_report.md".
+// The frontend still sets the browser download filename to
+// repopilot_${scanId}_report.md when saving the Blob.
 export const downloadReport = async (scanId: string): Promise<Blob> => {
   if (USE_MOCK) {
     await delay(500);
@@ -114,11 +165,15 @@ export const downloadReport = async (scanId: string): Promise<Blob> => {
     return new Blob([reportContent], { type: 'text/markdown' });
   }
 
-  const response = await apiClient.get(`/api/scan/${scanId}/report`, {
-    responseType: 'blob',
-  });
+  try {
+    const response = await apiClient.get(`/api/scan/${scanId}/report`, {
+      responseType: 'blob',
+    });
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
 };
 
 export const getRecentScans = async () => {
@@ -127,9 +182,13 @@ export const getRecentScans = async () => {
     return [];
   }
 
-  const response = await apiClient.get('/api/scans');
+  try {
+    const response = await apiClient.get('/api/scans');
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    return handleApiError(error);
+  }
 };
 
 // Export types for convenience

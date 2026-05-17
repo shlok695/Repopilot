@@ -3,20 +3,30 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ResultsDashboard from './ResultsDashboard';
 import { ScanResult } from '../types/scan';
+import { downloadReport } from '../api/scanApi';
+
+vi.mock('../api/scanApi', () => ({
+  downloadReport: vi.fn(),
+}));
 
 // Mock navigator.clipboard
 const mockClipboard = {
   writeText: vi.fn(),
 };
 
-Object.assign(navigator, {
-  clipboard: mockClipboard,
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: mockClipboard,
 });
 
 describe('ResultsDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+
+  const switchToTab = (name: string) => {
+    fireEvent.click(screen.getByRole('tab', { name }));
+  };
 
   const mockScanResult: ScanResult = {
     scanId: 'test-scan-123',
@@ -130,22 +140,25 @@ describe('ResultsDashboard', () => {
 
     it('shows "No vulnerabilities found" when vulnerabilities array is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
+      switchToTab('Vulnerabilities');
       expect(screen.getByText('No vulnerabilities found')).toBeInTheDocument();
     });
 
     it('shows "No bugs found" when bugs array is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
+      switchToTab('Bugs');
       expect(screen.getByText('No bugs found')).toBeInTheDocument();
     });
 
     it('shows "No fixes suggested" when suggestedFixes array is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
+      switchToTab('Suggested Fixes');
       expect(screen.getByText('No fixes suggested')).toBeInTheDocument();
     });
 
-    it('shows "No warnings" when warnings array is empty', () => {
+    it('does not show the warning box when warnings array is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
-      expect(screen.getByText('No warnings')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 
@@ -174,26 +187,30 @@ describe('ResultsDashboard', () => {
   describe('Severity Badges', () => {
     it('HIGH severity badge has red Tailwind class', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       const highBadges = screen.getAllByText('HIGH');
-      expect(highBadges[0]).toHaveClass('bg-red-100', 'text-red-800');
+      expect(highBadges[0]).toHaveClass('bg-red-100', 'text-red-900');
     });
 
     it('MEDIUM severity badge has orange Tailwind class', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       const mediumBadges = screen.getAllByText('MEDIUM');
-      expect(mediumBadges[0]).toHaveClass('bg-orange-100', 'text-orange-800');
+      expect(mediumBadges[0]).toHaveClass('bg-orange-100', 'text-orange-900');
     });
 
-    it('LOW severity badge has yellow Tailwind class', () => {
+    it('LOW severity badge has green Tailwind class for better contrast', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       const lowBadges = screen.getAllByText('LOW');
-      expect(lowBadges[0]).toHaveClass('bg-yellow-100', 'text-yellow-800');
+      expect(lowBadges[0]).toHaveClass('bg-green-100', 'text-green-900');
     });
   });
 
   describe('Sorting', () => {
     it('rows are sorted HIGH before MEDIUM before LOW', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       
       const severityBadges = screen.getAllByText(/HIGH|MEDIUM|LOW/);
       const vulnBadges = severityBadges.slice(0, 3); // First 3 are vulnerabilities
@@ -207,6 +224,7 @@ describe('ResultsDashboard', () => {
   describe('Expandable Rows', () => {
     it('clicking a vulnerability row expands the recommendation', async () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       
       // Find the first vulnerability row
       const vulnTitle = screen.getByText('SQL Injection vulnerability');
@@ -225,6 +243,7 @@ describe('ResultsDashboard', () => {
 
     it('clicking a bug row expands the recommendation', async () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Bugs');
       
       // Find the bug row
       const bugTitle = screen.getByText('Unused variable');
@@ -243,6 +262,7 @@ describe('ResultsDashboard', () => {
 
     it('clicking an expanded row collapses it', async () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       
       const vulnTitle = screen.getByText('SQL Injection vulnerability');
       
@@ -265,6 +285,7 @@ describe('ResultsDashboard', () => {
       mockClipboard.writeText.mockResolvedValue(undefined);
       
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('README');
       
       const copyButton = screen.getByText('Copy Markdown');
       fireEvent.click(copyButton);
@@ -278,6 +299,7 @@ describe('ResultsDashboard', () => {
       mockClipboard.writeText.mockResolvedValue(undefined);
       
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('README');
       
       const copyButton = screen.getByText('Copy Markdown');
       fireEvent.click(copyButton);
@@ -289,20 +311,33 @@ describe('ResultsDashboard', () => {
   });
 
   describe('Download Button', () => {
-    it('download button is enabled when scanId is present', () => {
+    it('renders current Task 6 download and share actions', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
       
-      const downloadButton = screen.getByText('📥 Download Full Report');
-      expect(downloadButton).not.toBeDisabled();
-      expect(downloadButton).toHaveAttribute('href', '/api/scan/test-scan-123/download');
+      expect(screen.getByRole('heading', { name: 'Download & Share' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Download markdown report/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Copy shareable link/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Copy.*JSON/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /View raw.*report/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Print/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Download HTML/i })).toBeInTheDocument();
     });
 
-    it('download button is disabled when scanId is missing', () => {
-      const scanResultWithoutId = { ...mockScanResult, scanId: '' };
-      render(<ResultsDashboard scanResult={scanResultWithoutId} />);
-      
-      const downloadButton = screen.getByText('📥 Download Not Available');
-      expect(downloadButton).toBeDisabled();
+    it('uses downloadReport with the scan ID instead of old anchor download endpoints', async () => {
+      vi.mocked(downloadReport).mockResolvedValue(new Blob(['report'], { type: 'text/markdown' }));
+      const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:dashboard-report');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      const anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      render(<ResultsDashboard scanResult={mockScanResult} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Download markdown report/i }));
+
+      await waitFor(() => {
+        expect(downloadReport).toHaveBeenCalledWith('test-scan-123');
+        expect(createObjectURLSpy).toHaveBeenCalled();
+        expect(anchorClickSpy).toHaveBeenCalled();
+      });
     });
   });
 
@@ -344,6 +379,7 @@ describe('ResultsDashboard', () => {
   describe('Suggested Fixes', () => {
     it('displays suggested fixes as numbered list with code formatting', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Suggested Fixes');
       
       expect(screen.getByText('Update all dependencies to latest versions')).toBeInTheDocument();
       expect(screen.getByText('Add input validation')).toBeInTheDocument();
@@ -352,6 +388,7 @@ describe('ResultsDashboard', () => {
 
     it('styles the full suggested fix content as monospace', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Suggested Fixes');
 
       const fixTitle = screen.getByText('Update all dependencies to latest versions');
       const fixBlock = fixTitle.closest('div');
@@ -374,6 +411,7 @@ describe('ResultsDashboard', () => {
   describe('Final Report', () => {
     it('final report is collapsible', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Full Report');
       
       const summary = screen.getByText(/Click to expand raw Markdown/);
       expect(summary).toBeInTheDocument();
@@ -396,6 +434,7 @@ describe('ResultsDashboard', () => {
       };
 
       render(<ResultsDashboard scanResult={scanResultWithReportMarkdown} />);
+      switchToTab('Full Report');
 
       fireEvent.click(screen.getByText(/Click to expand raw Markdown/));
 
@@ -405,6 +444,7 @@ describe('ResultsDashboard', () => {
 
     it('shows fallback when final report is empty', () => {
       render(<ResultsDashboard scanResult={emptyScanResult} />);
+      switchToTab('Full Report');
 
       expect(screen.getByText('No final report available')).toBeInTheDocument();
     });
@@ -413,6 +453,7 @@ describe('ResultsDashboard', () => {
   describe('Tool Display', () => {
     it('displays tool names for vulnerabilities', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Vulnerabilities');
       
       const npmAuditElements = screen.getAllByText('npm audit');
       expect(npmAuditElements.length).toBeGreaterThan(0);
@@ -421,6 +462,7 @@ describe('ResultsDashboard', () => {
 
     it('displays tool names for bugs', () => {
       render(<ResultsDashboard scanResult={mockScanResult} />);
+      switchToTab('Bugs');
       
       expect(screen.getByText('eslint')).toBeInTheDocument();
     });

@@ -1,9 +1,13 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ScanForm from '../components/ScanForm';
 
 describe('ScanForm', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('renders GitHub URL input by default', () => {
     const mockOnSubmit = vi.fn();
     render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
@@ -112,6 +116,38 @@ describe('ScanForm', () => {
       expect(screen.getByText(/Only .zip files are allowed/i)).toBeInTheDocument();
     });
   });
+
+  it('shows mock mode placeholder and helper text when mock mode is active', () => {
+    vi.stubEnv('VITE_MOCK_API', 'true');
+    const mockOnSubmit = vi.fn();
+
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+
+    expect(screen.getByPlaceholderText('https://github.com/example/react-dashboard-demo')).toBeInTheDocument();
+    expect(screen.getByText(/Mock mode is active/i)).toBeInTheDocument();
+    expect(screen.getByText(/Flask\/Python keyword/i)).toBeInTheDocument();
+  });
+
+  it('submits ZIP uploads in mock mode', async () => {
+    vi.stubEnv('VITE_MOCK_API', 'true');
+    const mockOnSubmit = vi.fn();
+    render(<ScanForm onSubmit={mockOnSubmit} isLoading={false} />);
+
+    const zipButton = screen.getByRole('button', { name: /ZIP Upload/i });
+    await userEvent.click(zipButton);
+
+    const file = new File(['content'], 'mock-repo.zip', { type: 'application/zip' });
+    const input = screen.getByLabelText(/Upload ZIP File/i);
+    await userEvent.upload(input, file);
+
+    await userEvent.click(screen.getByRole('button', { name: /Scan Repository/i }));
+
+    expect(mockOnSubmit).toHaveBeenCalledWith({
+      type: 'zip',
+      file,
+    });
+  });
+
 });
 
 // Made with Bob

@@ -4,7 +4,6 @@ import { sanitizeScanResult } from './sanitizeOutput.js';
 import { generateSuggestedFixes } from './suggestFixes.js';
 import { config } from './config.js';
 
-// Import agents (these will be created next)
 import { analyzeRepo } from '../agents/repoAnalyzerAgent.js';
 import { generateReadme } from '../agents/readmeGeneratorAgent.js';
 import { scanVulnerabilities } from '../agents/vulnerabilityScannerAgent.js';
@@ -22,7 +21,7 @@ const LANGUAGE_NAMES = new Set([
   'PHP',
 ]);
 
-const normalizeRepoMetadata = (metadata = {}) => {
+function normalizeRepoMetadata(metadata = {}) {
   const techStack = Array.isArray(metadata.techStack) ? metadata.techStack : [];
   const detectedFrameworks = Array.isArray(metadata.detectedFrameworks) ? metadata.detectedFrameworks : [];
   const languages = Array.isArray(metadata.languages) && metadata.languages.length > 0
@@ -50,35 +49,57 @@ const normalizeRepoMetadata = (metadata = {}) => {
     totalLines: metadata.totalLines ?? linesOfCode,
     packageManager: metadata.packageManager || 'unknown',
   };
-};
+}
 
-const normalizeFindingsResult = (result) => ({
-  findings: Array.isArray(result) ? result : result?.findings || [],
-  warnings: Array.isArray(result?.warnings) ? result.warnings : [],
-});
+function normalizeFindingsResult(result) {
+  return {
+    findings: Array.isArray(result) ? result : result?.findings || [],
+    warnings: Array.isArray(result?.warnings) ? result.warnings : [],
+  };
+}
 
-export const runFullScan = async (repoPath, scanId) => {
-  logger.info('ScanOrchestrator', `Starting full scan for ${scanId}`);
-  
+function deduplicateWarnings(warnings) {
+  return [...new Set(warnings.filter(Boolean))];
+}
+
+async function executeAgent(name, agentFn, scanId, warnings) {
+  const start = Date.now();
+  logger.info('ScanOrchestrator', `[${scanId}] ${name} started`);
+
+  try {
+    const result = await withTimeout(agentFn(), config.agentTimeoutMs, name);
+    logger.info('ScanOrchestrator', `[${scanId}] ${name} completed in ${Date.now() - start}ms`);
+    return { result, isTimeout: false };
+  } catch (error) {
+    const isTimeout = error instanceof Error && error.message.includes('timed out');
+    const reason = isTimeout
+      ? `${name} timed out after ${config.agentTimeoutMs}ms`
+      : `${name} failed - ${error.message}`;
+    logger.error('ScanOrchestrator', `[${scanId}] ${reason}`, error);
+    warnings.push(reason);
+    return { result: null, isTimeout };
+  }
+}
+
+export async function runFullScan(repoPath, scanId) {
+  const scanStart = Date.now();
+  logger.info('ScanOrchestrator', `Starting full scan`, { scanId, repoPath });
+
   const warnings = [];
+  let agentsSucceeded = 0;
+  let agentsTimedOut = 0;
   let repoMetadata = null;
   let readme = null;
   let vulnerabilities = [];
   let bugs = [];
 
   try {
-    // Step 1: Analyze Repository
-    logger.info('ScanOrchestrator', `[${scanId}] Step 1/5: Analyzing repository`);
-    try {
-      repoMetadata = await withTimeout(
-        analyzeRepo(repoPath),
-        config.AGENT_TIMEOUT_MS,
-        'Repository analysis'
-      );
-      repoMetadata = normalizeRepoMetadata(repoMetadata);
-    } catch (error) {
-      logger.error('ScanOrchestrator', `Repository analysis failed: ${error.message}`);
-      warnings.push('Repository analysis failed - using default metadata');
+    const metadataRun = await executeAgent('Repository Analysis', () => analyzeRepo(repoPath), scanId, warnings);
+    if (metadataRun.isTimeout) agentsTimedOut++;
+    if (metadataRun.result) {
+      repoMetadata = normalizeRepoMetadata(metadataRun.result);
+      agentsSucceeded++;
+    } else {
       repoMetadata = {
         name: 'unknown-repo',
         languages: ['Unknown'],
@@ -87,105 +108,103 @@ export const runFullScan = async (repoPath, scanId) => {
         hasTests: false,
         fileCount: 0,
         totalLines: 0,
+        packageManager: 'unknown',
       };
     }
 
-    // Step 2: Generate README
-    logger.info('ScanOrchestrator', `[${scanId}] Step 2/5: Generating README`);
-    try {
-      readme = await withTimeout(
-        generateReadme(repoPath, repoMetadata),
-        config.AGENT_TIMEOUT_MS,
-        'README generation'
-      );
-    } catch (error) {
-      logger.error('ScanOrchestrator', `README generation failed: ${error.message}`);
-      warnings.push('README generation failed - using placeholder');
+    const readmeRun = await executeAgent('README Generation', () => generateReadme(repoPath, repoMetadata), scanId, warnings);
+    if (readmeRun.isTimeout) agentsTimedOut++;
+    if (readmeRun.result) {
+      readme = readmeRun.result;
+      agentsSucceeded++;
+    } else {
       readme = {
         title: repoMetadata.name,
         content: `# ${repoMetadata.name}\n\nREADME generation failed. Please review the repository manually.`,
       };
     }
 
-    // Step 3: Scan Vulnerabilities
-    logger.info('ScanOrchestrator', `[${scanId}] Step 3/5: Scanning for vulnerabilities`);
-    try {
-      const vulnResult = normalizeFindingsResult(await withTimeout(
-        scanVulnerabilities(repoPath, repoMetadata),
-        config.AGENT_TIMEOUT_MS,
-        'Vulnerability scanning'
-      ));
-      vulnerabilities = vulnResult.findings || [];
-      if (vulnResult.warnings) {
-        warnings.push(...vulnResult.warnings);
-      }
-    } catch (error) {
-      logger.error('ScanOrchestrator', `Vulnerability scanning failed: ${error.message}`);
-      warnings.push('Vulnerability scanning failed - results may be incomplete');
+    const vulnRun = await executeAgent('Vulnerability Scanning', () => scanVulnerabilities(repoPath, repoMetadata), scanId, warnings);
+    if (vulnRun.isTimeout) agentsTimedOut++;
+    if (vulnRun.result) {
+      const vulnResult = normalizeFindingsResult(vulnRun.result);
+      vulnerabilities = vulnResult.findings;
+      warnings.push(...vulnResult.warnings);
+      agentsSucceeded++;
     }
 
-    // Step 4: Scan Bugs
-    logger.info('ScanOrchestrator', `[${scanId}] Step 4/5: Detecting bugs and code quality issues`);
-    try {
-      const bugResult = normalizeFindingsResult(await withTimeout(
-        scanBugs(repoPath, repoMetadata),
-        config.AGENT_TIMEOUT_MS,
-        'Bug scanning'
-      ));
-      bugs = bugResult.findings || [];
-      if (bugResult.warnings) {
-        warnings.push(...bugResult.warnings);
-      }
-    } catch (error) {
-      logger.error('ScanOrchestrator', `Bug scanning failed: ${error.message}`);
-      warnings.push('Bug scanning failed - results may be incomplete');
+    const bugRun = await executeAgent('Bug Scanning', () => scanBugs(repoPath, repoMetadata), scanId, warnings);
+    if (bugRun.isTimeout) agentsTimedOut++;
+    if (bugRun.result) {
+      const bugResult = normalizeFindingsResult(bugRun.result);
+      bugs = bugResult.findings;
+      warnings.push(...bugResult.warnings);
+      agentsSucceeded++;
     }
 
-    // Step 5: Generate Suggested Fixes and final report
-    logger.info('ScanOrchestrator', `[${scanId}] Step 5/5: Generating suggested fixes and report`);
     const suggestedFixes = generateSuggestedFixes(vulnerabilities, bugs);
-
     const baseResult = {
       scanId,
       status: 'completed',
       timestamp: new Date().toISOString(),
+      scanDuration: Date.now() - scanStart,
       repoMetadata,
       readme,
       vulnerabilities,
       bugs,
       suggestedFixes,
-      warnings,
+      warnings: deduplicateWarnings(warnings),
     };
 
     let reportMarkdown = '';
-    try {
-      const reportResult = await withTimeout(
-        generateFinalReport(baseResult),
-        config.AGENT_TIMEOUT_MS,
-        'Report generation'
-      );
-      reportMarkdown = typeof reportResult === 'string' ? reportResult : reportResult.markdown || '';
-    } catch (error) {
-      logger.error('ScanOrchestrator', `Report generation failed: ${error.message}`);
-      warnings.push('Report generation failed - markdown report unavailable');
+    const reportRun = await executeAgent(
+      'Report Generation',
+      () => generateFinalReport(baseResult),
+      scanId,
+      warnings
+    );
+    if (reportRun.isTimeout) agentsTimedOut++;
+    if (reportRun.result) {
+      reportMarkdown = typeof reportRun.result === 'string' ? reportRun.result : reportRun.result.markdown || '';
+      agentsSucceeded++;
+    } else {
+      reportMarkdown = `# Scan Report\n\nReport generation failed for scan ${scanId}.\n`;
+    }
+
+    if (agentsSucceeded === 0) {
+      return {
+        scanId,
+        status: 'failed',
+        timestamp: new Date().toISOString(),
+        error: 'All analysis agents failed. Please check logs and try again.',
+        warnings: deduplicateWarnings(warnings),
+      };
     }
 
     const scanResult = {
       ...baseResult,
-      warnings,
+      warnings: deduplicateWarnings(warnings),
       reportMarkdown,
     };
-
-    // Sanitize output to remove sensitive data
     const sanitizedResult = sanitizeScanResult(scanResult);
 
-    logger.info('ScanOrchestrator', `[${scanId}] Scan completed successfully`);
-    return sanitizedResult;
+    logger.info(
+      'ScanOrchestrator',
+      `Scan completed - ${agentsSucceeded}/5 agents succeeded, ${agentsTimedOut} timed out, ${vulnerabilities.length} vulns, ${bugs.length} bugs`,
+      { scanId, durationMs: Date.now() - scanStart }
+    );
 
+    return sanitizedResult;
   } catch (error) {
-    logger.error('ScanOrchestrator', `Fatal error during scan: ${error.message}`, error);
-    throw new Error(`Scan failed: ${error.message}`);
+    logger.error('ScanOrchestrator', `Fatal error: ${error.message}`, { scanId, error });
+    return {
+      scanId,
+      status: 'failed',
+      timestamp: new Date().toISOString(),
+      error: `Scan failed: ${error.message}`,
+      warnings: deduplicateWarnings(warnings),
+    };
   }
-};
+}
 
 // Made with Bob

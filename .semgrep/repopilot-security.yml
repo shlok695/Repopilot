@@ -1,0 +1,51 @@
+rules:
+  - id: javascript-dangerous-eval
+    message: Avoid eval because it can execute untrusted code.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern: eval(...)
+    metadata:
+      fix: Replace eval with safe parsing or explicit function calls.
+
+  - id: javascript-direct-html-assignment
+    message: Direct HTML assignment can introduce cross-site scripting.
+    severity: WARNING
+    languages:
+      - javascript
+      - typescript
+    pattern-either:
+      - pattern: $EL.innerHTML = $VALUE
+      - pattern: $EL.outerHTML = $VALUE
+    metadata:
+      fix: Use textContent or sanitize trusted HTML before assignment.
+
+  - id: javascript-document-write
+    message: document.write can introduce cross-site scripting and rendering issues.
+    severity: WARNING
+    languages:
+      - javascript
+      - typescript
+    pattern: document.write(...)
+    metadata:
+      fix: Use DOM APIs with sanitized content instead.
+
+  - id: javascript-template-sql-query
+    message: SQL queries built with template strings can be vulnerable to injection.
+    severity: ERROR
+    languages:
+      - javascript
+      - typescript
+    pattern-regex: (?i)(SELECT|INSERT|UPDATE|DELETE)\s+[\s\S]{0,120}\$\{
+    metadata:
+      fix: Use parameterized queries or prepared statements.
+
+  - id: hardcoded-secret-assignment
+    message: Potential hardcoded secret or credential.
+    severity: ERROR
+    languages:
+      - generic
+    pattern-regex: (?i)(password|api[_-]?key|secret|token)\s*[:=]\s*['"][^'"]{8,}['"]
+    metadata:
+      fix: Move secrets to environment variables and rotate exposed values.

@@ -86,7 +86,7 @@ export async function generateFinalReport(scanResult) {
     // Repository info
     repository: {
       name: repoMetadata?.name || 'Unknown',
-      fileCount: repoMetadata?.fileCount || 0,
+      fileCount: repoMetadata?.fileCount || repoMetadata?.totalFiles || 0,
       totalLines: repoMetadata?.totalLines || 0,
       languages: repoMetadata?.languages || [],
       frameworks: repoMetadata?.frameworks || [],

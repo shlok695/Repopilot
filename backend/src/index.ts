@@ -35,7 +35,7 @@ process.on('unhandledRejection', (reason: any) => {
 });
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 const TMP_DIR = process.env.TMP_DIR || '/tmp/repopilot';
 

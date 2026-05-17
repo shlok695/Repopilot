@@ -3,9 +3,11 @@ import Home from './pages/Home';
 import Results from './pages/Results';
 import MockModeBanner from './components/MockModeBanner';
 
+const basename = '/repopilot';
+
 function App() {
   return (
-    <Router>
+    <Router basename={basename}>
       <div className="min-h-screen bg-gray-50">
         <MockModeBanner />
         <Routes>

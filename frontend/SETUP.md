@@ -24,7 +24,7 @@ VITE_MOCK_API=false
 npm run dev
 ```
 
-Visit: **http://localhost:3000**
+Visit: **http://localhost:3000/repopilot**
 
 ---
 
@@ -236,7 +236,7 @@ After setup, verify:
 - [ ] `npm install` completed without errors
 - [ ] `.env` file exists with correct values
 - [ ] `npm run dev` starts server on port 3000
-- [ ] Can access http://localhost:3000
+- [ ] Can access http://localhost:3000/repopilot
 - [ ] Can toggle between GitHub URL and ZIP upload
 - [ ] Form validation works (try invalid URL)
 - [ ] Mock mode works (set `VITE_MOCK_API=true`)
